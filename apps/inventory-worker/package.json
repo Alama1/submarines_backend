@@ -1,0 +1,40 @@
+{
+  "name": "@ff14/inventory-worker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "nest build",
+    "start": "node dist/main",
+    "start:dev": "nest start --watch",
+    "lint": "eslint \"{src}/**/*.ts\" --fix",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@ff14/entities": "workspace:*",
+    "@ff14/types": "workspace:*",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/config": "^3.3.0",
+    "@nestjs/microservices": "^11.0.0",
+    "@nestjs/typeorm": "^10.0.2",
+    "@nestjs/cache-manager": "^2.3.0",
+    "cache-manager": "^5.7.6",
+    "cache-manager-ioredis-yet": "^2.1.0",
+    "amqplib": "^0.10.5",
+    "amqp-connection-manager": "^4.1.14",
+    "typeorm": "^0.3.20",
+    "pg": "^8.13.3",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "typeorm-naming-strategies": "^4.1.0"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/schematics": "^11.0.0",
+    "@nestjs/testing": "^11.0.0",
+    "@types/amqplib": "^0.10.6",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.2"
+  }
+}

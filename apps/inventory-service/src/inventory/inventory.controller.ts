@@ -1,0 +1,75 @@
+﻿import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Put,
+  Query,
+  UseInterceptors,
+} from '@nestjs/common';
+import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
+import { InventoryService } from './inventory.service';
+import { IngestDto } from './dto/ingest.dto';
+import { UpdateStockDto } from './dto/update-stock.dto';
+import { UpdateTargetDto } from './dto/update-target.dto';
+
+@Controller('inventory')
+export class InventoryController {
+  constructor(private readonly svc: InventoryService) {}
+
+  /** Returns all materials with stock counts. Cached in Redis for 30 seconds. */
+  @Get()
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(30)
+  findAll(
+    @Query('search') search?: string,
+    @Query('page') page = '1',
+    @Query('limit') limit = '50',
+  ) {
+    const p = Math.max(1, parseInt(page, 10) || 1);
+    const l = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+    return this.svc.findAll(search, p, l);
+  }
+
+  /** Materials where currentStock < desiredQuantity */
+  @Get('missing')
+  findMissing(
+    @Query('page') page = '1',
+    @Query('limit') limit = '50',
+  ) {
+    const p = Math.max(1, parseInt(page, 10) || 1);
+    const l = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+    return this.svc.findMissing(p, l);
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.svc.findOne(id);
+  }
+
+  /** Browser extension ingest payload -> RabbitMQ -> 202 Accepted */
+  @Post('ingest')
+  @HttpCode(HttpStatus.ACCEPTED)
+  ingest(@Body() dto: IngestDto) {
+    return this.svc.ingest(dto);
+  }
+
+  @Put(':id/stock')
+  updateStock(
+    @Param('id') id: string,
+    @Body() dto: UpdateStockDto,
+  ) {
+    return this.svc.updateStock(id, dto);
+  }
+
+  @Put(':id/target')
+  updateTarget(
+    @Param('id') id: string,
+    @Body() dto: UpdateTargetDto,
+  ) {
+    return this.svc.updateTarget(id, dto);
+  }
+}

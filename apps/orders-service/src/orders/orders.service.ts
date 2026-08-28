@@ -1,0 +1,245 @@
+﻿import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, In, Repository } from 'typeorm';
+import { ClientProxy } from '@nestjs/microservices';
+import * as crypto from 'crypto';
+import {
+  BulkDiscount,
+  Order,
+  OrderItem,
+  OrderStatus,
+  SubmarinePart,
+} from '@ff14/entities';
+import { CreateOrderDto } from './dto/create-order.dto';
+import { UpdateOrderStatusDto } from './dto/update-status.dto';
+import { UpdateOrderNotesDto } from './dto/update-notes.dto';
+
+@Injectable()
+export class OrdersService {
+  constructor(
+    @InjectRepository(Order)
+    private readonly orderRepo: Repository<Order>,
+    @InjectRepository(SubmarinePart)
+    private readonly partRepo: Repository<SubmarinePart>,
+    @InjectRepository(BulkDiscount)
+    private readonly discountRepo: Repository<BulkDiscount>,
+    @InjectDataSource()
+    private readonly ds: DataSource,
+    @Inject('ORDER_RMQ_CLIENT')
+    private readonly rmqClient: ClientProxy,
+  ) {}
+
+  /** Generates a human-friendly unique order code, e.g. SUB-7K9P */
+  private async generateUniqueOrderCode(): Promise<string> {
+    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // Excludes confusing characters 0/O, 1/I
+    for (let attempt = 0; attempt < 10; attempt++) {
+      let code = 'SUB-';
+      const bytes = crypto.randomBytes(6);
+      for (let i = 0; i < 6; i++) {
+        code += chars[bytes[i] % chars.length];
+      }
+      const existing = await this.orderRepo.findOne({ where: { orderCode: code } });
+      if (!existing) {
+        return code;
+      }
+    }
+    // Fallback if loop finishes
+    return `SUB-${Date.now().toString(36).toUpperCase()}`;
+  }
+
+  async findAll(
+    status?: OrderStatus,
+    page = 1,
+    limit = 20,
+  ): Promise<{ items: Order[]; total: number }> {
+    const qb = this.orderRepo
+      .createQueryBuilder('o')
+      .leftJoinAndSelect('o.items', 'items')
+      .leftJoinAndSelect('items.part', 'part');
+
+    if (status) {
+      qb.where('o.status = :status', { status });
+    }
+
+    const [items, total] = await qb
+      .orderBy('o.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return { items, total };
+  }
+
+  async findOne(id: string): Promise<Order> {
+    const order = await this.orderRepo.findOne({
+      where: { id },
+      relations: ['items', 'items.part'],
+    });
+    if (!order) throw new NotFoundException(`Order "${id}" not found`);
+    return order;
+  }
+
+  async findByCode(code: string): Promise<Order> {
+    const normalized = code.trim().toUpperCase();
+    const order = await this.orderRepo
+      .createQueryBuilder('o')
+      .leftJoinAndSelect('o.items', 'items')
+      .leftJoinAndSelect('items.part', 'part')
+      .where('UPPER(o.order_code) = :code', { code: normalized })
+      .getOne();
+
+    if (!order) throw new NotFoundException(`Order with code "${code}" not found`);
+    return order;
+  }
+
+  async create(dto: CreateOrderDto): Promise<Order> {
+    if (!dto.items?.length) {
+      throw new BadRequestException('Order must contain at least one item');
+    }
+
+    const partIds = [...new Set(dto.items.map((i) => i.partId))];
+    const parts = await this.partRepo.find({ where: { id: In(partIds) } });
+    const partMap = new Map<string, SubmarinePart>(parts.map((p) => [p.id, p]));
+
+    // Verify all parts exist
+    for (const itemDto of dto.items) {
+      if (!partMap.has(itemDto.partId)) {
+        throw new NotFoundException(`Submarine part "${itemDto.partId}" not found`);
+      }
+    }
+
+    // 1. Calculate line totals and subtotal
+    let subtotal = 0;
+    const preparedItems: Array<{
+      part: SubmarinePart;
+      quantity: number;
+      buildName: string | null;
+      unitPrice: number;
+      lineTotal: number;
+    }> = [];
+
+    for (const itemDto of dto.items) {
+      const part = partMap.get(itemDto.partId)!;
+      const unitPrice = part.price;
+      const lineTotal = unitPrice * itemDto.quantity;
+      subtotal += lineTotal;
+
+      preparedItems.push({
+        part,
+        quantity: itemDto.quantity,
+        buildName: itemDto.buildName ?? null,
+        unitPrice,
+        lineTotal,
+      });
+    }
+
+    // 2. Fetch bulk discounts and apply the highest matching tier
+    const discounts = await this.discountRepo.find({
+      order: { threshold: 'DESC' },
+    });
+    const matchingTier = discounts.find((d) => subtotal >= d.threshold);
+
+    const discountPct = matchingTier ? Number(matchingTier.discountPercent) : 0;
+    const discountAmt = Math.round(subtotal * (discountPct / 100));
+    const total = subtotal - discountAmt;
+    const orderCode = await this.generateUniqueOrderCode();
+
+    // 3. Save Order and OrderItems in a transaction with 'pending' status
+    const savedOrder = await this.ds.transaction(async (em) => {
+      const order = em.create(Order, {
+        orderCode,
+        clientName: dto.clientName,
+        contactInfo: dto.contactInfo ?? null,
+        rawText: dto.rawText ?? null,
+        notes: dto.notes ?? null,
+        fulfillmentDt: dto.fulfillmentDt ?? null,
+        subtotal,
+        discountPct,
+        discountAmt,
+        total,
+        status: 'pending',
+      });
+      await em.save(order);
+
+      for (const pi of preparedItems) {
+        const orderItem = em.create(OrderItem, {
+          order,
+          part: pi.part,
+          partName: pi.part.name,
+          partType: pi.part.partType,
+          quantity: pi.quantity,
+          unitPrice: pi.unitPrice,
+          lineTotal: pi.lineTotal,
+          buildName: pi.buildName,
+        });
+        await em.save(orderItem);
+      }
+
+      return em.findOne(Order, {
+        where: { id: order.id },
+        relations: ['items', 'items.part'],
+      });
+    });
+
+    return savedOrder!;
+  }
+
+  /**
+   * Admin confirms & activates the order by providing the client's confirmation code.
+   * This triggers inventory reservation and order processing.
+   */
+  async confirmByCode(code: string): Promise<Order> {
+    const order = await this.findByCode(code);
+    return this.activateOrder(order);
+  }
+
+  /** Admin confirms & activates the order by order ID. */
+  async confirmById(id: string): Promise<Order> {
+    const order = await this.findOne(id);
+    return this.activateOrder(order);
+  }
+
+  private async activateOrder(order: Order): Promise<Order> {
+    if (order.status !== 'pending') {
+      throw new BadRequestException(`Order "${order.orderCode}" is already in "${order.status}" status (can only confirm pending orders)`);
+    }
+
+    order.confirmedAt = new Date();
+    await this.orderRepo.save(order);
+
+    // Emit event to RabbitMQ for order-worker to reserve inventory and fulfill
+    this.rmqClient.emit('order_processing', { orderId: order.id });
+
+    return order;
+  }
+
+  async updateStatus(id: string, dto: UpdateOrderStatusDto): Promise<Order> {
+    const order = await this.findOne(id);
+    order.status = dto.status;
+    await this.orderRepo.save(order);
+    return this.findOne(id);
+  }
+
+  async updateNotes(id: string, dto: UpdateOrderNotesDto): Promise<Order> {
+    const order = await this.findOne(id);
+    if (dto.notes !== undefined) order.notes = dto.notes;
+    if (dto.fulfillmentDt !== undefined) order.fulfillmentDt = dto.fulfillmentDt;
+    await this.orderRepo.save(order);
+    return this.findOne(id);
+  }
+
+  async cancel(id: string): Promise<Order> {
+    const order = await this.findOne(id);
+    if (order.status !== 'pending') {
+      throw new BadRequestException(`Cannot cancel order in "${order.status}" status (only pending orders can be cancelled)`);
+    }
+    order.status = 'cancelled';
+    await this.orderRepo.save(order);
+    return this.findOne(id);
+  }
+}

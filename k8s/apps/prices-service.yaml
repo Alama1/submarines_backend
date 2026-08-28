@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prices-service
+  namespace: ff14-submarines
+  labels:
+    app: prices-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: prices-service
+  template:
+    metadata:
+      labels:
+        app: prices-service
+    spec:
+      containers:
+        - name: prices-service
+          image: ghcr.io/alama1/prices-service:latest
+          ports:
+            - containerPort: 3001
+          envFrom:
+            - secretRef:
+                name: prices-service-env
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3001
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prices-service
+  namespace: ff14-submarines
+spec:
+  selector:
+    app: prices-service
+  ports:
+    - port: 3001
+      targetPort: 3001
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: prices-service
+  namespace: ff14-submarines
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: prices-service
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

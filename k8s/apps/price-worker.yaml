@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: price-worker
+  namespace: ff14-submarines
+  labels:
+    app: price-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: price-worker
+  template:
+    metadata:
+      labels:
+        app: price-worker
+    spec:
+      containers:
+        - name: price-worker
+          image: ghcr.io/alama1/price-worker:latest
+          envFrom:
+            - secretRef:
+                name: price-worker-env
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

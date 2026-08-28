@@ -1,0 +1,23 @@
+{
+  "name": "ff14-submarines-backend",
+  "private": true,
+  "scripts": {
+    "dev": "docker compose up --build",
+    "dev:infra": "docker compose -f docker-compose.infra.yml up -d",
+    "build:all": "pnpm -r build",
+    "lint:all": "pnpm -r lint",
+    "test:all": "pnpm -r test",
+    "dev:local": "pnpm -r --parallel start:dev",
+    "migration:generate": "pnpm --filter @ff14/entities migration:generate",
+    "migration:run": "pnpm --filter @ff14/entities migration:run",
+    "migration:gateway:generate": "pnpm --filter @ff14/entities migration:gateway:generate",
+    "migration:gateway:run": "pnpm --filter @ff14/entities migration:gateway:run"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.0.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.0.0"
+  }
+}

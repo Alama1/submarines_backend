@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-worker
+  namespace: ff14-submarines
+  labels:
+    app: inventory-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inventory-worker
+  template:
+    metadata:
+      labels:
+        app: inventory-worker
+    spec:
+      containers:
+        - name: inventory-worker
+          image: ghcr.io/alama1/inventory-worker:latest
+          envFrom:
+            - secretRef:
+                name: inventory-worker-env
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

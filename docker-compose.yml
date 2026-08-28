@@ -1,0 +1,178 @@
+services:
+  # ── Infrastructure ─────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ff14
+      POSTGRES_USER: ff14
+      POSTGRES_PASSWORD: ff14local
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ff14 -d ff14"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ff14
+      RABBITMQ_DEFAULT_PASS: ff14local
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # ── HTTP Services ───────────────────────────────────────────────
+  api-gateway:
+    build: { context: ., dockerfile: ./apps/api-gateway/Dockerfile }
+    ports: ["3000:3000"]
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      RABBITMQ_URL: amqp://ff14:ff14local@rabbitmq:5672
+    env_file:
+      - path: ./apps/api-gateway/.env.local
+        required: false
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+  prices-service:
+    build: { context: ., dockerfile: ./apps/prices-service/Dockerfile }
+    ports: ["3001:3001"]
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      RABBITMQ_URL: amqp://ff14:ff14local@rabbitmq:5672
+    env_file:
+      - path: ./apps/prices-service/.env.local
+        required: false
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+  inventory-service:
+    build: { context: ., dockerfile: ./apps/inventory-service/Dockerfile }
+    ports: ["3002:3002"]
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      RABBITMQ_URL: amqp://ff14:ff14local@rabbitmq:5672
+    env_file:
+      - path: ./apps/inventory-service/.env.local
+        required: false
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+  orders-service:
+    build: { context: ., dockerfile: ./apps/orders-service/Dockerfile }
+    ports: ["3003:3003"]
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      RABBITMQ_URL: amqp://ff14:ff14local@rabbitmq:5672
+    env_file:
+      - path: ./apps/orders-service/.env.local
+        required: false
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+  recipes-service:
+    build: { context: ., dockerfile: ./apps/recipes-service/Dockerfile }
+    ports: ["3004:3004"]
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+    env_file:
+      - path: ./apps/recipes-service/.env.local
+        required: false
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+
+  # ── Workers ─────────────────────────────────────────────────────
+  price-worker:
+    build: { context: ., dockerfile: ./apps/price-worker/Dockerfile }
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      RABBITMQ_URL: amqp://ff14:ff14local@rabbitmq:5672
+    env_file:
+      - path: ./apps/price-worker/.env.local
+        required: false
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+  inventory-worker:
+    build: { context: ., dockerfile: ./apps/inventory-worker/Dockerfile }
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      RABBITMQ_URL: amqp://ff14:ff14local@rabbitmq:5672
+    env_file:
+      - path: ./apps/inventory-worker/.env.local
+        required: false
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+  order-worker:
+    build: { context: ., dockerfile: ./apps/order-worker/Dockerfile }
+    environment:
+      POSTGRES_HOST: postgres
+      RABBITMQ_URL: amqp://ff14:ff14local@rabbitmq:5672
+    env_file:
+      - path: ./apps/order-worker/.env.local
+        required: false
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+

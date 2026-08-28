@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Environment files — keep templates, ignore actuals
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Firebase service account (NEVER commit!)
+firebase-service-account.json
+*-service-account.json
+
+# pnpm
+.pnpm-store/
+
+# Testing
+coverage/
+.nyc_output/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

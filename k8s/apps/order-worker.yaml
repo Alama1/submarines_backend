@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-worker
+  namespace: ff14-submarines
+  labels:
+    app: order-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-worker
+  template:
+    metadata:
+      labels:
+        app: order-worker
+    spec:
+      containers:
+        - name: order-worker
+          image: ghcr.io/alama1/order-worker:latest
+          envFrom:
+            - secretRef:
+                name: order-worker-env
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
