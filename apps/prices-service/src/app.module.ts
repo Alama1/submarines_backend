@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -22,8 +23,8 @@ import { PricesModule } from './prices/prices.module';
         username: cfg.get<string>('POSTGRES_USER', 'ff14'),
         password: cfg.get<string>('POSTGRES_PASSWORD', 'ff14local'),
         entities: [BaseMaterial, PartMaterial, SubmarinePart],
-        migrations: ['dist/migrations/*.js'],
-        migrationsRun: false,
+        migrations: [join(__dirname, '../../..', 'packages/entities/dist/migrations/*.js')],
+        migrationsRun: true,
         namingStrategy: new SnakeNamingStrategy(),
         synchronize: false,
         logging: process.env.NODE_ENV !== 'production',
