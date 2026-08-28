@@ -26,6 +26,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 COPY --from=builder /app/package.json /app/pnpm-workspace.yaml ./
+COPY --from=builder /app/tsconfig.base.json ./tsconfig.base.json
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/apps/prices-service/package.json ./apps/prices-service/package.json
