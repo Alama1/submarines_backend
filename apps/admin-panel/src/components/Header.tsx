@@ -57,7 +57,7 @@ export const Header: React.FC<HeaderProps> = ({ onRefresh, isRefreshing }) => {
               </button>
             </div>
           ) : (
-            <span className="text-xs text-slate-500">Unauthenticated Admin</span>
+            <span className="text-xs text-slate-500">Not signed in</span>
           )}
         </div>
       </header>

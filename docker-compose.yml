@@ -49,8 +49,19 @@ services:
       retries: 5
 
   admin-panel:
-    build: { context: ., dockerfile: ./apps/admin-panel/Dockerfile }
+    build:
+      context: .
+      dockerfile: ./apps/admin-panel/Dockerfile
     ports: ["8080:8080"]
+    environment:
+      API_GATEWAY_HOST: ${API_GATEWAY_HOST:-api-gateway}
+      API_GATEWAY_PORT: ${API_GATEWAY_PORT:-3000}
+      FIREBASE_API_KEY: ${FIREBASE_API_KEY:-}
+      FIREBASE_AUTH_DOMAIN: ${FIREBASE_AUTH_DOMAIN:-}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_STORAGE_BUCKET: ${FIREBASE_STORAGE_BUCKET:-}
+      FIREBASE_MESSAGING_SENDER_ID: ${FIREBASE_MESSAGING_SENDER_ID:-}
+      FIREBASE_APP_ID: ${FIREBASE_APP_ID:-}
     depends_on:
       - api-gateway
     restart: unless-stopped
@@ -58,8 +69,9 @@ services:
   # ── HTTP Services ───────────────────────────────────────────────
   api-gateway:
     build: { context: ., dockerfile: ./apps/api-gateway/Dockerfile }
-    ports: ["3000:3000"]
+    ports: ["${API_GATEWAY_PORT:-3000}:${API_GATEWAY_PORT:-3000}"]
     environment:
+      PORT: ${API_GATEWAY_PORT:-3000}
       POSTGRES_HOST: postgres
       REDIS_HOST: redis
       RABBITMQ_URL: amqp://ff14:ff14local@rabbitmq:5672

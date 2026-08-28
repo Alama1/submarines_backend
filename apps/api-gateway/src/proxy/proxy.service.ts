@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger } from '@nestjs/common';
+﻿import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
 
 export interface ProxyIncomingRequest {
   url?: string;
@@ -9,10 +9,10 @@ export interface ProxyIncomingRequest {
   user?: { uid?: string; email?: string; type?: string; label?: string };
 }
 
-export interface ProxyOutgoingReply {
-  status(code: number): this;
-  header(key: string, value: string): this;
-  send(payload: unknown): this;
+export interface ProxiedResponse {
+  status: number;
+  contentType: string;
+  body: unknown;
 }
 
 @Injectable()
@@ -22,8 +22,7 @@ export class ProxyService {
   async forwardRequest(
     targetBaseUrl: string,
     req: ProxyIncomingRequest,
-    reply: ProxyOutgoingReply,
-  ): Promise<void> {
+  ): Promise<ProxiedResponse> {
     const rawUrl = req.raw?.url || req.url || '';
     const targetUrl = `${targetBaseUrl.replace(/\/$/, '')}${rawUrl}`;
     const method = req.method;
@@ -36,7 +35,6 @@ export class ProxyService {
       headers['accept'] = req.headers['accept'] as string;
     }
 
-    // Attach verified user identity headers for downstream services
     const user = req.user;
     if (user?.uid) {
       headers['x-user-id'] = user.uid;
@@ -61,24 +59,32 @@ export class ProxyService {
         body,
       });
 
-      const responseContentType = response.headers.get('content-type') || 'application/json';
-      reply.status(response.status);
-      reply.header('content-type', responseContentType);
+      const contentType = response.headers.get('content-type') || 'application/json';
+      const text = await response.text();
+      let payload: unknown = text;
 
-      if (responseContentType.includes('application/json')) {
-        const json = await response.json();
-        reply.send(json);
-      } else {
-        const text = await response.text();
-        reply.send(text);
+      if (contentType.includes('application/json')) {
+        if (!text) {
+          payload = null;
+        } else {
+          try {
+            payload = JSON.parse(text);
+          } catch {
+            payload = text;
+          }
+        }
       }
+
+      return {
+        status: response.status,
+        contentType,
+        body: payload,
+      };
     } catch (err: unknown) {
       this.logger.error(`Failed to forward request to ${targetUrl}: ${(err as Error).message}`);
-      reply.status(502).send({
-        statusCode: 502,
-        error: 'Bad Gateway',
-        message: `Failed to connect to downstream service at ${targetBaseUrl}`,
-      });
+      throw new BadGatewayException(
+        `Failed to connect to downstream service at ${targetBaseUrl}`,
+      );
     }
   }
 }

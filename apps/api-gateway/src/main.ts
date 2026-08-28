@@ -22,7 +22,7 @@ async function bootstrap(): Promise<void> {
 
   app.setGlobalPrefix('api');
 
-  const port = parseInt(process.env.PORT ?? '3000', 10);
+  const port = parseInt(process.env.PORT ?? process.env.API_GATEWAY_PORT ?? '3000', 10);
   await app.listen(port, '0.0.0.0');
   console.log(`[api-gateway] Listening on http://0.0.0.0:${port}`);
 }

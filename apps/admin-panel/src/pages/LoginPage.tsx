@@ -1,14 +1,27 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { Navigate } from 'react-router-dom';
 import { Anchor, ShieldCheck } from 'lucide-react';
+import { isFirebaseConfigured } from '../lib/firebase';
 
 export const LoginPage: React.FC = () => {
-  const { user, login, loading } = useAuth();
+  const { user, login, loading, authError } = useAuth();
+  const [localError, setLocalError] = useState<string | null>(null);
 
   if (user) {
     return <Navigate to="/" replace />;
   }
+
+  const onLogin = async () => {
+    setLocalError(null);
+    try {
+      await login();
+    } catch (err: unknown) {
+      setLocalError(err instanceof Error ? err.message : 'Google sign-in failed');
+    }
+  };
+
+  const error = localError || authError;
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
@@ -22,9 +35,19 @@ export const LoginPage: React.FC = () => {
           Restricted management console. Sign in with your authorized admin account.
         </p>
 
+        {!isFirebaseConfigured && (
+          <p className="mb-6 text-xs text-amber-400 text-left leading-relaxed">
+            Firebase web config is missing. In Portainer, set FIREBASE_API_KEY,
+            FIREBASE_AUTH_DOMAIN, FIREBASE_PROJECT_ID, and FIREBASE_APP_ID on the
+            admin-panel service, then recreate the container.
+          </p>
+        )}
+
+        {error && <p className="mb-6 text-xs text-rose-400 text-left leading-relaxed">{error}</p>}
+
         <button
-          onClick={login}
-          disabled={loading}
+          onClick={onLogin}
+          disabled={loading || !isFirebaseConfigured}
           className="w-full flex items-center justify-center gap-3 px-6 py-3.5 rounded-xl bg-white text-slate-900 font-semibold hover:bg-slate-100 transition shadow-lg disabled:opacity-50"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">

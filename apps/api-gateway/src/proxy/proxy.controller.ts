@@ -1,6 +1,7 @@
 ﻿import { All, Controller, Req, Res } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ProxyIncomingRequest, ProxyOutgoingReply, ProxyService } from './proxy.service';
+import { FastifyReply } from 'fastify';
+import { ProxyIncomingRequest, ProxyService } from './proxy.service';
 
 @Controller()
 export class ProxyController {
@@ -19,67 +20,74 @@ export class ProxyController {
     this.ordersUrl = config.get<string>('ORDERS_SERVICE_URL', 'http://orders-service:3003');
   }
 
+  private async forward(targetBaseUrl: string, req: ProxyIncomingRequest, reply: FastifyReply) {
+    const result = await this.proxy.forwardRequest(targetBaseUrl, req);
+    reply.status(result.status);
+    reply.header('content-type', result.contentType);
+    return result.body;
+  }
+
   // ── Recipes Service (/api/materials, /api/recipes) ────────────
   @All('materials')
-  proxyMaterialsRoot(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
-    return this.proxy.forwardRequest(this.recipesUrl, req, reply);
+  proxyMaterialsRoot(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    return this.forward(this.recipesUrl, req, reply);
   }
 
   @All('materials/*')
-  proxyMaterialsWildcard(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
-    return this.proxy.forwardRequest(this.recipesUrl, req, reply);
+  proxyMaterialsWildcard(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    return this.forward(this.recipesUrl, req, reply);
   }
 
   @All('recipes')
-  proxyRecipesRoot(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
-    return this.proxy.forwardRequest(this.recipesUrl, req, reply);
+  proxyRecipesRoot(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    return this.forward(this.recipesUrl, req, reply);
   }
 
   @All('recipes/*')
-  proxyRecipesWildcard(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
-    return this.proxy.forwardRequest(this.recipesUrl, req, reply);
+  proxyRecipesWildcard(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    return this.forward(this.recipesUrl, req, reply);
   }
 
   // ── Prices Service (/api/prices) ──────────────────────────────
   @All('prices')
-  proxyPricesRoot(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
-    return this.proxy.forwardRequest(this.pricesUrl, req, reply);
+  proxyPricesRoot(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    return this.forward(this.pricesUrl, req, reply);
   }
 
   @All('prices/*')
-  proxyPricesWildcard(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
-    return this.proxy.forwardRequest(this.pricesUrl, req, reply);
+  proxyPricesWildcard(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    return this.forward(this.pricesUrl, req, reply);
   }
 
   // ── Inventory Service (/api/inventory) ────────────────────────
   @All('inventory')
-  proxyInventoryRoot(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
-    return this.proxy.forwardRequest(this.inventoryUrl, req, reply);
+  proxyInventoryRoot(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    return this.forward(this.inventoryUrl, req, reply);
   }
 
   @All('inventory/*')
-  proxyInventoryWildcard(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
-    return this.proxy.forwardRequest(this.inventoryUrl, req, reply);
+  proxyInventoryWildcard(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    return this.forward(this.inventoryUrl, req, reply);
   }
 
   // ── Orders Service (/api/orders, /api/discounts) ──────────────
   @All('orders')
-  proxyOrdersRoot(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
-    return this.proxy.forwardRequest(this.ordersUrl, req, reply);
+  proxyOrdersRoot(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    return this.forward(this.ordersUrl, req, reply);
   }
 
   @All('orders/*')
-  proxyOrdersWildcard(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
-    return this.proxy.forwardRequest(this.ordersUrl, req, reply);
+  proxyOrdersWildcard(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    return this.forward(this.ordersUrl, req, reply);
   }
 
   @All('discounts')
-  proxyDiscountsRoot(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
-    return this.proxy.forwardRequest(this.ordersUrl, req, reply);
+  proxyDiscountsRoot(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    return this.forward(this.ordersUrl, req, reply);
   }
 
   @All('discounts/*')
-  proxyDiscountsWildcard(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
-    return this.proxy.forwardRequest(this.ordersUrl, req, reply);
+  proxyDiscountsWildcard(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    return this.forward(this.ordersUrl, req, reply);
   }
 }

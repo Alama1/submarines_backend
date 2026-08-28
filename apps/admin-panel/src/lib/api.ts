@@ -19,12 +19,8 @@ api.interceptors.request.use(async (config) => {
     }
   }
 
-  // Fallback to API Key from localStorage or environment / dev default
-  const storedKey =
-    localStorage.getItem('admin_api_key') ||
-    import.meta.env.VITE_ADMIN_API_KEY ||
-    'ff14-submarines-dev-key';
-
+  // Optional plugin/dev key — never fall back to a hardcoded production default
+  const storedKey = localStorage.getItem('admin_api_key') || import.meta.env.VITE_ADMIN_API_KEY;
   if (storedKey) {
     config.headers['x-api-key'] = storedKey;
   }
