@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadRequestException,
   Inject,
   Injectable,
@@ -75,6 +75,58 @@ export class OrdersService {
     return { items, total };
   }
 
+  async findInProgress(): Promise<{
+    orders: Array<{
+      id: string;
+      orderCode: string;
+      clientName: string;
+      contactInfo: string | null;
+      notes: string | null;
+      confirmedAt: Date | null;
+      createdAt: Date;
+      items: Array<{
+        partId: string;
+        partName: string;
+        partType: string | null;
+        buildName: string | null;
+        quantity: number;   // ordered
+        stock: number;      // currently ready in retainers
+        unitPrice: number;
+        lineTotal: number;
+      }>;
+    }>;
+  }> {
+    const orders = await this.orderRepo
+      .createQueryBuilder('o')
+      .leftJoinAndSelect('o.items', 'items')
+      .leftJoinAndSelect('items.part', 'part')
+      .where('o.status = :status', { status: 'in_progress' })
+      .orderBy('o.confirmedAt', 'ASC')
+      .getMany();
+
+    return {
+      orders: orders.map((o) => ({
+        id: o.id,
+        orderCode: o.orderCode,
+        clientName: o.clientName,
+        contactInfo: o.contactInfo,
+        notes: o.notes,
+        confirmedAt: o.confirmedAt,
+        createdAt: o.createdAt,
+        items: (o.items ?? []).map((item) => ({
+          partId: item.part?.id ?? '',
+          partName: item.partName,
+          partType: item.partType,
+          buildName: item.buildName,
+          quantity: item.quantity,
+          stock: item.part?.stock ?? 0,
+          unitPrice: item.unitPrice,
+          lineTotal: item.lineTotal,
+        })),
+      })),
+    };
+  }
+
   async findOne(id: string): Promise<Order> {
     const order = await this.orderRepo.findOne({
       where: { id },
@@ -138,11 +190,12 @@ export class OrdersService {
       });
     }
 
-    // 2. Fetch bulk discounts and apply the highest matching tier
+    // 2. Fetch bulk discounts and apply the highest matching tier based on total parts quantity
+    const totalPartsCount = preparedItems.reduce((acc, i) => acc + i.quantity, 0);
     const discounts = await this.discountRepo.find({
       order: { threshold: 'DESC' },
     });
-    const matchingTier = discounts.find((d) => subtotal >= d.threshold);
+    const matchingTier = discounts.find((d) => totalPartsCount >= d.threshold);
 
     const discountPct = matchingTier ? Number(matchingTier.discountPercent) : 0;
     const discountAmt = Math.round(subtotal * (discountPct / 100));

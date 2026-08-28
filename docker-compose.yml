@@ -48,6 +48,13 @@ services:
       timeout: 10s
       retries: 5
 
+  admin-panel:
+    build: { context: ., dockerfile: ./apps/admin-panel/Dockerfile }
+    ports: ["8080:8080"]
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+
   # ── HTTP Services ───────────────────────────────────────────────
   api-gateway:
     build: { context: ., dockerfile: ./apps/api-gateway/Dockerfile }

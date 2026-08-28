@@ -1,0 +1,152 @@
+﻿version: '3.8'
+
+services:
+  # ── Infrastructure ──────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ff14_db}
+      POSTGRES_USER: ${POSTGRES_USER:-ff14}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ff14local}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ff14} -d ${POSTGRES_DB:-ff14_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-ff14}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-ff14local}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Frontend & Gateway ──────────────────────────────────────────
+  admin-panel:
+    image: ghcr.io/${IMAGE_PREFIX:-user/submarines}-admin-panel:latest
+    ports:
+      - "8080:8080"
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+
+  api-gateway:
+    image: ghcr.io/${IMAGE_PREFIX:-user/submarines}-api-gateway:latest
+    ports:
+      - "3000:3000"
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-ff14}:${RABBITMQ_PASS:-ff14local}@rabbitmq:5672
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-ff14-submarines-dev-key}
+      ALLOWED_EMAILS: ${ALLOWED_EMAILS:-}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL:-}
+      FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY:-}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+  # ── Microservices ───────────────────────────────────────────────
+  prices-service:
+    image: ghcr.io/${IMAGE_PREFIX:-user/submarines}-prices-service:latest
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-ff14}:${RABBITMQ_PASS:-ff14local}@rabbitmq:5672
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+  inventory-service:
+    image: ghcr.io/${IMAGE_PREFIX:-user/submarines}-inventory-service:latest
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-ff14}:${RABBITMQ_PASS:-ff14local}@rabbitmq:5672
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+  orders-service:
+    image: ghcr.io/${IMAGE_PREFIX:-user/submarines}-orders-service:latest
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-ff14}:${RABBITMQ_PASS:-ff14local}@rabbitmq:5672
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+  recipes-service:
+    image: ghcr.io/${IMAGE_PREFIX:-user/submarines}-recipes-service:latest
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+
+  # ── Background Workers ──────────────────────────────────────────
+  price-worker:
+    image: ghcr.io/${IMAGE_PREFIX:-user/submarines}-price-worker:latest
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-ff14}:${RABBITMQ_PASS:-ff14local}@rabbitmq:5672
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+  inventory-worker:
+    image: ghcr.io/${IMAGE_PREFIX:-user/submarines}-inventory-worker:latest
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-ff14}:${RABBITMQ_PASS:-ff14local}@rabbitmq:5672
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+  order-worker:
+    image: ghcr.io/${IMAGE_PREFIX:-user/submarines}-order-worker:latest
+    environment:
+      POSTGRES_HOST: postgres
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-ff14}:${RABBITMQ_PASS:-ff14local}@rabbitmq:5672
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

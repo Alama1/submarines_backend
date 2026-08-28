@@ -5,7 +5,7 @@ export class BulkDiscount {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  /** Minimum order subtotal (gil) to qualify */
+  /** Minimum total parts quantity in order to qualify */
   @Column({ type: 'int' })
   threshold: number;
 

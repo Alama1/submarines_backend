@@ -17,6 +17,8 @@ build/
 # Firebase service account (NEVER commit!)
 firebase-service-account.json
 *-service-account.json
+*-firebase-adminsdk-*.json
+firestore-export.json
 
 # pnpm
 .pnpm-store/

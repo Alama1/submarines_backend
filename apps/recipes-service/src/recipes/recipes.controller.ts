@@ -1,4 +1,4 @@
-﻿import {
+import {
   Body,
   Controller,
   Delete,
@@ -27,6 +27,12 @@ export class RecipesController {
     return this.svc.findAll();
   }
 
+  /** Manually trigger recalculation of all raw material targets based on submarine part desiredStock */
+  @Post('recalculate-targets')
+  recalculateTargets() {
+    return this.svc.recalculateMaterialTargets();
+  }
+
   @Get(':id')
   @UseInterceptors(CacheInterceptor)
   @CacheTTL(86_400)
@@ -37,6 +43,11 @@ export class RecipesController {
   @Post()
   create(@Body() dto: CreatePartDto) {
     return this.svc.create(dto);
+  }
+
+  @Put(':id/target')
+  updateTarget(@Param('id') id: string, @Body('desiredStock') desiredStock: number) {
+    return this.svc.updateTarget(id, desiredStock);
   }
 
   @Put(':id')

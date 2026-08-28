@@ -1,4 +1,4 @@
-﻿import {
+import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
@@ -42,24 +42,32 @@ export class AuthGuard implements CanActivate {
     const rawUrl = (req.raw?.url || req.url || '').split('?')[0];
     const method = req.method;
 
-    // 1. Check for X-API-Key header (used by browser extension)
+    // 1. Check for X-API-Key header (used by admin panel & browser extension / plugin)
     const apiKey = headers['x-api-key'];
     if (apiKey && typeof apiKey === 'string') {
-      const keyHash = crypto.createHash('sha256').update(apiKey.trim()).digest('hex');
+      const trimmedKey = apiKey.trim();
+
+      // Check against configured master Admin Key (or default dev key)
+      const masterKey = this.config.get<string>('ADMIN_API_KEY', 'ff14-submarines-dev-key');
+      if (masterKey && trimmedKey === masterKey) {
+        req.user = { type: 'api_key', label: 'Master Admin' };
+        return true;
+      }
+
+      const keyHash = crypto.createHash('sha256').update(trimmedKey).digest('hex');
       const keyEntity = await this.apiKeyRepo.findOne({
         where: { keyHash, isActive: true },
       });
 
-      if (!keyEntity) {
-        throw new UnauthorizedException('Invalid or inactive API key');
+      if (keyEntity) {
+        // Update last used timestamp asynchronously
+        keyEntity.lastUsedAt = new Date();
+        this.apiKeyRepo.save(keyEntity).catch(() => {});
+        req.user = { type: 'api_key', label: keyEntity.label };
+        return true;
       }
 
-      // Update last used timestamp asynchronously
-      keyEntity.lastUsedAt = new Date();
-      this.apiKeyRepo.save(keyEntity).catch(() => {});
-
-      req.user = { type: 'api_key', label: keyEntity.label };
-      return true;
+      throw new UnauthorizedException('Invalid or inactive API key');
     }
 
     // 2. Check for Authorization: Bearer <FirebaseIdToken>
@@ -100,6 +108,8 @@ export class AuthGuard implements CanActivate {
       (method === 'POST' && (rawUrl === '/api/orders' || rawUrl === '/orders')) ||
       // Public customer looking up their order by confirmation code
       (method === 'GET' && (rawUrl.startsWith('/api/orders/lookup/') || rawUrl.startsWith('/orders/lookup/'))) ||
+      // Public in-progress orders feed (for real-time progress page on customer site)
+      (method === 'GET' && (rawUrl === '/api/orders/in-progress' || rawUrl === '/orders/in-progress')) ||
       // Public browsing of parts, materials, prices, discounts
       (method === 'GET' &&
         (rawUrl.startsWith('/api/recipes') ||

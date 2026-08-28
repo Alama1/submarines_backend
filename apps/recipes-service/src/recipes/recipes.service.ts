@@ -1,4 +1,4 @@
-﻿import {
+import {
   ConflictException,
   Inject,
   Injectable,
@@ -23,13 +23,75 @@ export class RecipesService {
   ) {}
 
   findAll(): Promise<SubmarinePart[]> {
-    return this.partRepo.find({ order: { name: 'ASC' } });
+    return this.partRepo.find({
+      order: { name: 'ASC' },
+      relations: ['materials', 'materials.material'],
+    });
   }
 
   async findOne(id: string): Promise<SubmarinePart> {
-    const part = await this.partRepo.findOne({ where: { id } });
+    const part = await this.partRepo.findOne({
+      where: { id },
+      relations: ['materials', 'materials.material'],
+    });
     if (!part) throw new NotFoundException(`Part "${id}" not found`);
     return part;
+  }
+
+  /**
+   * Recalculates desiredQuantity for every BaseMaterial based on:
+   * sum(part.desiredStock * partMaterial.quantity) across all registered submarine parts.
+   */
+  async recalculateMaterialTargets(): Promise<{
+    updatedCount: number;
+    totalRequirements: Record<string, number>;
+  }> {
+    // 1. Fetch all submarine parts with their material relations
+    const parts = await this.partRepo.find({
+      relations: ['materials', 'materials.material'],
+    });
+
+    // 2. Aggregate required raw materials
+    const materialDesiredMap = new Map<string, number>();
+
+    for (const part of parts) {
+      const partTarget = part.desiredStock || 0;
+      if (partTarget > 0 && part.materials) {
+        for (const pm of part.materials) {
+          if (pm.material) {
+            const matId = pm.material.id;
+            const currentTotal = materialDesiredMap.get(matId) || 0;
+            materialDesiredMap.set(matId, currentTotal + partTarget * pm.quantity);
+          }
+        }
+      }
+    }
+
+    // 3. Fetch all base materials and update desiredQuantity
+    const allMaterials = await this.ds.getRepository(BaseMaterial).find();
+    const requirementsObj: Record<string, number> = {};
+
+    await this.ds.transaction(async (em) => {
+      for (const mat of allMaterials) {
+        const calculatedTarget = materialDesiredMap.get(mat.id) || 0;
+        requirementsObj[mat.name] = calculatedTarget;
+        if (mat.desiredQuantity !== calculatedTarget) {
+          mat.desiredQuantity = calculatedTarget;
+          await em.save(mat);
+        }
+      }
+    });
+
+    await this.cache.reset();
+    return { updatedCount: allMaterials.length, totalRequirements: requirementsObj };
+  }
+
+  async updateTarget(id: string, desiredStock: number): Promise<SubmarinePart> {
+    const part = await this.findOne(id);
+    part.desiredStock = Math.max(0, desiredStock);
+    await this.partRepo.save(part);
+    await this.recalculateMaterialTargets();
+    return this.findOne(id);
   }
 
   async create(dto: CreatePartDto): Promise<SubmarinePart> {
@@ -39,7 +101,7 @@ export class RecipesService {
       const part = em.create(SubmarinePart, partData);
       await em.save(part);
 
-      for (const m of materials) {
+      for (const m of (materials ?? [])) {
         const material = await em.findOne(BaseMaterial, {
           where: { id: m.materialId },
         });
@@ -49,9 +111,13 @@ export class RecipesService {
         await em.save(em.create(PartMaterial, { part, material, quantity: m.quantity }));
       }
 
-      return em.findOne(SubmarinePart, { where: { id: part.id } });
+      return em.findOne(SubmarinePart, {
+        where: { id: part.id },
+        relations: ['materials', 'materials.material'],
+      });
     });
 
+    await this.recalculateMaterialTargets();
     await this.cache.reset();
     return saved as SubmarinePart;
   }
@@ -86,9 +152,13 @@ export class RecipesService {
         }
       }
 
-      return em.findOne(SubmarinePart, { where: { id } });
+      return em.findOne(SubmarinePart, {
+        where: { id: part.id },
+        relations: ['materials', 'materials.material'],
+      });
     });
 
+    await this.recalculateMaterialTargets();
     await this.cache.reset();
     return saved as SubmarinePart;
   }
@@ -113,6 +183,7 @@ export class RecipesService {
     }
 
     await this.partRepo.remove(part);
+    await this.recalculateMaterialTargets();
     await this.cache.reset();
   }
 }

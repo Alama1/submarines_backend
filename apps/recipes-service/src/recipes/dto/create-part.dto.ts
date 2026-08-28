@@ -1,4 +1,4 @@
-﻿import {
+import {
   IsArray,
   IsBoolean,
   IsInt,
@@ -24,7 +24,7 @@ export class PartMaterialInputDto {
 }
 
 export class CreatePartDto {
-  /** Stable slug identifier, e.g. ''shark_hull'', ''whale_modified_stern'' */
+  /** Stable slug identifier, e.g. 'shark_hull', 'whale_modified_stern' */
   @IsString()
   @IsNotEmpty()
   id: string;
@@ -32,6 +32,13 @@ export class CreatePartDto {
   @IsString()
   @IsNotEmpty()
   name: string;
+
+  /** FF14 in-game item ID for retainer inventory matching */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Type(() => Number)
+  itemId?: number;
 
   /** hull | stern | bow | bridge */
   @IsString()
@@ -66,9 +73,17 @@ export class CreatePartDto {
   @Type(() => Number)
   stock?: number;
 
+  /** Target quantity of this part desired in workshop inventory */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Type(() => Number)
+  desiredStock?: number;
+
   /** List of material requirements for crafting this part */
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => PartMaterialInputDto)
-  materials: PartMaterialInputDto[];
+  materials?: PartMaterialInputDto[];
 }

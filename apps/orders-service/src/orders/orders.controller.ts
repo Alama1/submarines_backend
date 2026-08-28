@@ -1,4 +1,4 @@
-﻿import {
+import {
   Body,
   Controller,
   Delete,
@@ -30,11 +30,18 @@ export class OrdersController {
     return this.svc.findAll(status, p, l);
   }
 
+  /** Public endpoint: all currently in-progress orders with live part stock levels */
+  @Get('in-progress')
+  findInProgress() {
+    return this.svc.findInProgress();
+  }
+
   /** Public lookup endpoint for clients to view order status via their code */
   @Get('lookup/:code')
   findByCode(@Param('code') code: string) {
     return this.svc.findByCode(code);
   }
+
 
   @Get(':id')
   findOne(@Param('id') id: string) {

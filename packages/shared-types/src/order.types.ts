@@ -1,6 +1,6 @@
 import { SubmarinePart } from './submarine.types';
 
-export type OrderStatus = 'pending' | 'processing' | 'fulfilled' | 'cancelled';
+export type OrderStatus = 'pending' | 'in_progress' | 'processing' | 'fulfilled' | 'cancelled';
 
 export interface OrderItem {
   id?: number;
@@ -15,33 +15,61 @@ export interface OrderItem {
 }
 
 export interface Order {
-  id?: string;
+  id: string;
+  orderCode: string;
   clientName: string;
-  rawText: string | null;
+  contactInfo?: string | null;
+  rawText?: string | null;
   subtotal: number;
   discountPct: number;
   discountAmt: number;
   total: number;
   status: OrderStatus;
-  notes: string | null;
-  fulfillmentDt: string | null;
+  notes?: string | null;
+  fulfillmentDt?: string | null;
+  confirmedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items?: OrderItem[];
+}
+
+export interface BulkDiscount {
+  id: string;
+  threshold: number;
+  discountPercent: number;
   createdAt?: string;
   updatedAt?: string;
-  items?: OrderItem[];
 }
 
 export interface CreateOrderDto {
   clientName: string;
+  contactInfo?: string;
   rawText?: string;
   items: Array<{
-    partId?: string;
-    partName: string;
-    partType?: string;
+    partId: string;
     quantity: number;
-    unitPrice: number;
     buildName?: string;
   }>;
   notes?: string;
   fulfillmentDt?: string;
 }
 
+export interface InProgressOrderFeedItem {
+  id: string;
+  orderCode: string;
+  clientName: string;
+  contactInfo: string | null;
+  notes: string | null;
+  confirmedAt: string | null;
+  createdAt: string;
+  items: Array<{
+    partId: string;
+    partName: string;
+    partType: string | null;
+    buildName: string | null;
+    quantity: number;
+    stock: number;
+    unitPrice: number;
+    lineTotal: number;
+  }>;
+}

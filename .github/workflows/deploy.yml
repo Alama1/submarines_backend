@@ -1,0 +1,72 @@
+﻿name: CI/CD - Build & Publish Containers
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/submarines
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - name: api-gateway
+            dockerfile: ./apps/api-gateway/Dockerfile
+          - name: prices-service
+            dockerfile: ./apps/prices-service/Dockerfile
+          - name: inventory-service
+            dockerfile: ./apps/inventory-service/Dockerfile
+          - name: orders-service
+            dockerfile: ./apps/orders-service/Dockerfile
+          - name: recipes-service
+            dockerfile: ./apps/recipes-service/Dockerfile
+          - name: price-worker
+            dockerfile: ./apps/price-worker/Dockerfile
+          - name: inventory-worker
+            dockerfile: ./apps/inventory-worker/Dockerfile
+          - name: order-worker
+            dockerfile: ./apps/order-worker/Dockerfile
+          - name: admin-panel
+            dockerfile: ./apps/admin-panel/Dockerfile
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Downcase Image Name
+        id: image-name
+        run: |
+          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.service.name }}"
+          echo "image_name=$(echo $IMAGE_NAME | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.service.dockerfile }}
+          push: true
+          tags: |
+            ${{ steps.image-name.outputs.image_name }}:latest
+            ${{ steps.image-name.outputs.image_name }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

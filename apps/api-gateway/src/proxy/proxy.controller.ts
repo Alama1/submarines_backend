@@ -21,33 +21,65 @@ export class ProxyController {
 
   // ── Recipes Service (/api/materials, /api/recipes) ────────────
   @All('materials')
+  proxyMaterialsRoot(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
+    return this.proxy.forwardRequest(this.recipesUrl, req, reply);
+  }
+
   @All('materials/*')
+  proxyMaterialsWildcard(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
+    return this.proxy.forwardRequest(this.recipesUrl, req, reply);
+  }
+
   @All('recipes')
+  proxyRecipesRoot(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
+    return this.proxy.forwardRequest(this.recipesUrl, req, reply);
+  }
+
   @All('recipes/*')
-  proxyRecipes(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
+  proxyRecipesWildcard(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
     return this.proxy.forwardRequest(this.recipesUrl, req, reply);
   }
 
   // ── Prices Service (/api/prices) ──────────────────────────────
   @All('prices')
+  proxyPricesRoot(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
+    return this.proxy.forwardRequest(this.pricesUrl, req, reply);
+  }
+
   @All('prices/*')
-  proxyPrices(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
+  proxyPricesWildcard(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
     return this.proxy.forwardRequest(this.pricesUrl, req, reply);
   }
 
   // ── Inventory Service (/api/inventory) ────────────────────────
   @All('inventory')
+  proxyInventoryRoot(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
+    return this.proxy.forwardRequest(this.inventoryUrl, req, reply);
+  }
+
   @All('inventory/*')
-  proxyInventory(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
+  proxyInventoryWildcard(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
     return this.proxy.forwardRequest(this.inventoryUrl, req, reply);
   }
 
   // ── Orders Service (/api/orders, /api/discounts) ──────────────
   @All('orders')
+  proxyOrdersRoot(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
+    return this.proxy.forwardRequest(this.ordersUrl, req, reply);
+  }
+
   @All('orders/*')
+  proxyOrdersWildcard(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
+    return this.proxy.forwardRequest(this.ordersUrl, req, reply);
+  }
+
   @All('discounts')
+  proxyDiscountsRoot(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
+    return this.proxy.forwardRequest(this.ordersUrl, req, reply);
+  }
+
   @All('discounts/*')
-  proxyOrders(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
+  proxyDiscountsWildcard(@Req() req: ProxyIncomingRequest, @Res() reply: ProxyOutgoingReply) {
     return this.proxy.forwardRequest(this.ordersUrl, req, reply);
   }
 }

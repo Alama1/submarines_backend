@@ -42,6 +42,10 @@ export class SubmarinePart {
   @Column({ type: 'int', default: 0 })
   stock: number;
 
+  /** Target quantity of this part desired in workshop inventory */
+  @Column({ type: 'int', default: 0 })
+  desiredStock: number;
+
   @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 
