@@ -1,7 +1,7 @@
 ﻿import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { BaseMaterial } from '@ff14/entities';
+import { BaseMaterial, MaterialSource } from '@ff14/entities';
 import { PricesService } from './prices.service';
 
 describe('PricesService', () => {
@@ -17,7 +17,7 @@ describe('PricesService', () => {
     marketPrice: 400,
     myPrice: null,
     npcPrice: 10,
-    whereToBuy: 'Market',
+    whereToBuy: MaterialSource.MARKET,
     updatedAt: new Date(),
   };
 

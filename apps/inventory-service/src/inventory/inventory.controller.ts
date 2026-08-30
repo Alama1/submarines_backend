@@ -45,6 +45,18 @@ export class InventoryController {
     return this.svc.findMissing(p, l);
   }
 
+  /** Repair/utility supplies (e.g. Magitek Repair Materials), kept out of the crafting inventory */
+  @Get('repair')
+  findRepairs(
+    @Query('search') search?: string,
+    @Query('page') page = '1',
+    @Query('limit') limit = '50',
+  ) {
+    const p = Math.max(1, parseInt(page, 10) || 1);
+    const l = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+    return this.svc.findRepairs(search, p, l);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.svc.findOne(id);

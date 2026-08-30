@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import { formatGil, formatNumber } from '../lib/utils';
+import { formatGil, formatNumber, sourceBadgeClass } from '../lib/utils';
 import {
   Hammer,
   Plus,
@@ -12,7 +12,13 @@ import {
   Boxes,
   AlertCircle,
 } from 'lucide-react';
-import { SubmarinePart, BaseMaterial } from '@ff14/types';
+import {
+  SubmarinePart,
+  BaseMaterial,
+  MaterialSource,
+  MaterialCategory,
+  MATERIAL_SOURCES,
+} from '@ff14/types';
 
 export const RecipesPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -42,7 +48,8 @@ export const RecipesPage: React.FC = () => {
   const [desiredQuantity, setDesiredQuantity] = useState(1000);
   const [myPrice, setMyPrice] = useState<number | ''>('');
   const [npcPrice, setNpcPrice] = useState<number | ''>('');
-  const [whereToBuy, setWhereToBuy] = useState('Market');
+  const [whereToBuy, setWhereToBuy] = useState<MaterialSource>('Market');
+  const [matCategory, setMatCategory] = useState<MaterialCategory>('crafting');
   const [matError, setMatError] = useState<string | null>(null);
   const [matSuccess, setMatSuccess] = useState<string | null>(null);
 
@@ -127,16 +134,6 @@ export const RecipesPage: React.FC = () => {
     },
     onError: (err: any) => {
       alert(err.response?.data?.message || 'Cannot delete material used in existing recipes.');
-    },
-  });
-
-  const updatePartTargetMutation = useMutation({
-    mutationFn: ({ id, desiredStock }: { id: string; desiredStock: number }) =>
-      api.put(`/recipes/${id}/target`, { desiredStock }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['recipes'] });
-      queryClient.invalidateQueries({ queryKey: ['inventory'] });
-      queryClient.invalidateQueries({ queryKey: ['materials'] });
     },
   });
 
@@ -228,6 +225,7 @@ export const RecipesPage: React.FC = () => {
     setMyPrice('');
     setNpcPrice('');
     setWhereToBuy('Market');
+    setMatCategory('crafting');
     setMatError(null);
     setMatSuccess(null);
     setIsEditingMat(true);
@@ -241,6 +239,7 @@ export const RecipesPage: React.FC = () => {
     setMyPrice(mat.myPrice ?? '');
     setNpcPrice(mat.npcPrice ?? '');
     setWhereToBuy(mat.whereToBuy || 'Market');
+    setMatCategory(mat.category || 'crafting');
     setMatError(null);
     setMatSuccess(null);
     setIsEditingMat(true);
@@ -254,6 +253,7 @@ export const RecipesPage: React.FC = () => {
       name: matName.trim(),
       desiredQuantity: Number(desiredQuantity),
       whereToBuy,
+      category: matCategory,
     };
     if (matItemId !== '') payload.itemId = Number(matItemId);
     if (myPrice !== '') payload.myPrice = Number(myPrice);
@@ -365,36 +365,8 @@ export const RecipesPage: React.FC = () => {
                           <td className="px-4 py-3 uppercase text-slate-300 font-mono">
                             {part.partType}
                           </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() =>
-                                  updatePartTargetMutation.mutate({
-                                    id: part.id,
-                                    desiredStock: Math.max(0, (part.desiredStock || 0) - 1),
-                                  })
-                                }
-                                className="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold text-xs"
-                                title="Decrease Target"
-                              >
-                                -
-                              </button>
-                              <span className="font-mono text-cyan-400 font-bold px-1.5 min-w-[20px] text-center">
-                                {part.desiredStock ?? 0}
-                              </span>
-                              <button
-                                onClick={() =>
-                                  updatePartTargetMutation.mutate({
-                                    id: part.id,
-                                    desiredStock: (part.desiredStock || 0) + 1,
-                                  })
-                                }
-                                className="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold text-xs"
-                                title="Increase Target"
-                              >
-                                +
-                              </button>
-                            </div>
+                          <td className="px-4 py-3 font-mono text-cyan-400 font-bold text-center">
+                            {part.desiredStock ?? 0}
                           </td>
                           <td className="px-4 py-3 font-mono text-emerald-400 font-bold">
                             {part.stock} ready
@@ -706,7 +678,14 @@ export const RecipesPage: React.FC = () => {
                       allMaterials.map((mat) => (
                         <tr key={mat.id} className="hover:bg-slate-800/40 transition">
                           <td className="px-4 py-3 font-semibold text-white">
-                            {mat.name}
+                            <div className="flex items-center gap-2">
+                              {mat.name}
+                              {mat.category === 'repair' && (
+                                <span className="px-1.5 py-0.5 rounded bg-violet-500/10 border border-violet-500/20 text-violet-300 text-[10px] font-semibold uppercase tracking-wide">
+                                  Repair
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-3 font-mono text-slate-400">
                             {mat.itemId || '—'}
@@ -724,8 +703,10 @@ export const RecipesPage: React.FC = () => {
                           <td className="px-4 py-3 font-mono text-slate-400">
                             {mat.npcPrice != null ? formatGil(mat.npcPrice) : '—'}
                           </td>
-                          <td className="px-4 py-3 text-slate-400">
-                            {mat.whereToBuy}
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${sourceBadgeClass(mat.whereToBuy)}`}>
+                              {mat.whereToBuy}
+                            </span>
                           </td>
                           <td className="px-4 py-3 text-right space-x-1.5">
                             <button
@@ -845,13 +826,34 @@ export const RecipesPage: React.FC = () => {
 
                 <div>
                   <label className="block text-slate-400 mb-1">Primary Acquisition Source</label>
-                  <input
-                    type="text"
+                  <select
                     value={whereToBuy}
-                    onChange={(e) => setWhereToBuy(e.target.value)}
-                    placeholder="Market / Vendor / Workshop"
+                    onChange={(e) => setWhereToBuy(e.target.value as MaterialSource)}
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
-                  />
+                  >
+                    {MATERIAL_SOURCES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                  {whereToBuy === 'NPC' && (
+                    <p className="mt-1 text-[10px] text-violet-300">
+                      NPC-sourced items are always stocked to the max.
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 mb-1">Inventory Category</label>
+                  <select
+                    value={matCategory}
+                    onChange={(e) => setMatCategory(e.target.value as MaterialCategory)}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                  >
+                    <option value="crafting">Crafting Material</option>
+                    <option value="repair">Repair Supply (separate section)</option>
+                  </select>
                 </div>
 
                 <div className="pt-3">

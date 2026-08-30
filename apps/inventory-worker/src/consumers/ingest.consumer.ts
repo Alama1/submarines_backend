@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import { BaseMaterial, SubmarinePart } from '@ff14/entities';
+import { BaseMaterial, MaterialSource, SubmarinePart } from '@ff14/entities';
 
 // ─── Payload shapes (mirrors the plugin DTOs) ────────────────────────────────
 
@@ -117,10 +117,22 @@ export class IngestConsumer {
     for (const [itemId, { qty, name }] of stockByItemId.entries()) {
       // Try base_materials first
       const mat = matByItemId.get(itemId) ?? matByName.get(name.toLowerCase());
-      if (mat && mat.currentStock !== qty) {
-        mat.currentStock = qty;
-        matsToSave.push(mat);
-        continue;
+      if (mat) {
+        // NPC-sourced items are always stocked to the max (target quantity),
+        // regardless of what the plugin reports
+        if (mat.whereToBuy === MaterialSource.NPC) {
+          if (mat.currentStock !== mat.desiredQuantity) {
+            mat.currentStock = mat.desiredQuantity;
+            matsToSave.push(mat);
+          }
+          continue;
+        }
+
+        if (mat.currentStock !== qty) {
+          mat.currentStock = qty;
+          matsToSave.push(mat);
+          continue;
+        }
       }
 
       // Then try submarine_parts (e.g. crafted hulls, sterns, bows stored in retainers)

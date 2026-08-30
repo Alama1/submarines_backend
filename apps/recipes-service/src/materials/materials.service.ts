@@ -5,7 +5,7 @@
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { BaseMaterial } from '@ff14/entities';
+import { BaseMaterial, MaterialSource } from '@ff14/entities';
 import { CreateMaterialDto } from './dto/create-material.dto';
 import { UpdateMaterialDto } from './dto/update-material.dto';
 
@@ -42,12 +42,30 @@ export class MaterialsService {
   }
 
   create(dto: CreateMaterialDto): Promise<BaseMaterial> {
-    return this.repo.save(this.repo.create(dto));
+    const mat = this.repo.create(dto);
+
+    // NPC-sourced items are always stocked to the max (target quantity)
+    if (mat.whereToBuy === MaterialSource.NPC) {
+      mat.currentStock = mat.desiredQuantity ?? 0;
+    }
+
+    return this.repo.save(mat);
   }
 
   async update(id: string, dto: UpdateMaterialDto): Promise<BaseMaterial> {
-    await this.findOne(id); // throws 404 if missing
-    await this.repo.update(id, dto);
+    const existing = await this.findOne(id); // throws 404 if missing
+
+    const effectiveSource = dto.whereToBuy ?? existing.whereToBuy;
+    const effectiveTarget = dto.desiredQuantity ?? existing.desiredQuantity;
+
+    const updates: Partial<BaseMaterial> = { ...dto };
+
+    // Keep NPC-sourced items maxed out whenever source or target changes
+    if (effectiveSource === MaterialSource.NPC) {
+      updates.currentStock = effectiveTarget;
+    }
+
+    await this.repo.update(id, updates);
     return this.findOne(id);
   }
 

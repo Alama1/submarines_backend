@@ -8,7 +8,15 @@ import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import { BaseMaterial, PartMaterial, SubmarinePart, expandAllPartMaterials, ExpandedMaterialRequirement } from '@ff14/entities';
+import {
+  BaseMaterial,
+  MaterialCategory,
+  MaterialSource,
+  PartMaterial,
+  SubmarinePart,
+  expandAllPartMaterials,
+  ExpandedMaterialRequirement,
+} from '@ff14/entities';
 import { CreatePartDto } from './dto/create-part.dto';
 import { UpdatePartDto } from './dto/update-part.dto';
 
@@ -100,10 +108,18 @@ export class RecipesService {
 
     await this.ds.transaction(async (em) => {
       for (const mat of allMaterials) {
+        // Repair/utility supplies (e.g. Magitek Repair Materials) have manually
+        // managed targets and are never derived from part goals
+        if (mat.category === MaterialCategory.REPAIR) continue;
+
         const calculatedTarget = materialDesiredMap.get(mat.id) || 0;
         requirementsObj[mat.name] = calculatedTarget;
         if (mat.desiredQuantity !== calculatedTarget) {
           mat.desiredQuantity = calculatedTarget;
+          // NPC-sourced items are always stocked to the max
+          if (mat.whereToBuy === MaterialSource.NPC) {
+            mat.currentStock = calculatedTarget;
+          }
           await em.save(mat);
         }
       }

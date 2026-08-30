@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { PartMaterial } from './part-material.entity';
+import { MaterialCategory, MaterialSource } from './material-enums';
 
 @Entity('base_materials')
 export class BaseMaterial {
@@ -40,8 +41,21 @@ export class BaseMaterial {
   @Column({ type: 'int', nullable: true })
   npcPrice: number | null;
 
-  @Column({ default: 'Market' })
-  whereToBuy: string;
+  @Column({
+    type: 'enum',
+    enum: MaterialSource,
+    enumName: 'material_source',
+    default: MaterialSource.MARKET,
+  })
+  whereToBuy: MaterialSource;
+
+  @Column({
+    type: 'enum',
+    enum: MaterialCategory,
+    enumName: 'material_category',
+    default: MaterialCategory.CRAFTING,
+  })
+  category: MaterialCategory;
 
   @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;

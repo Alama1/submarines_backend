@@ -1,4 +1,5 @@
 import {
+  IsEnum,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -7,6 +8,7 @@ import {
   ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { MaterialCategory, MaterialSource } from '@ff14/entities';
 
 export class CreateMaterialDto {
   /** In-game item name — must be unique */
@@ -45,8 +47,13 @@ export class CreateMaterialDto {
   @Type(() => Number)
   npcPrice?: number | null;
 
-  /** Where to obtain this material, e.g. "Market", "Vendor", "Crafted" */
+  /** Where this material is acquired from: Market | Craft | NPC */
   @IsOptional()
-  @IsString()
-  whereToBuy?: string;
+  @IsEnum(MaterialSource)
+  whereToBuy?: MaterialSource;
+
+  /** Inventory grouping: crafting materials vs repair/utility supplies */
+  @IsOptional()
+  @IsEnum(MaterialCategory)
+  category?: MaterialCategory;
 }

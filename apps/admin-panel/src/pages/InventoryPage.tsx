@@ -1,29 +1,67 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import { formatNumber } from '../lib/utils';
+import { formatNumber, sourceBadgeClass } from '../lib/utils';
 import {
   Search,
   AlertTriangle,
-  CheckCircle2,
-  Edit2,
-  Save,
-  X,
+  Wrench,
   Hammer,
   ChevronDown,
   ChevronUp,
   Layers,
 } from 'lucide-react';
-import { BaseMaterial, SubmarinePart } from '@ff14/types';
+import { SubmarinePart } from '@ff14/types';
+
+/**
+ * Number input that keeps a local draft and commits the parsed value
+ * when it loses focus (or Enter is pressed).
+ */
+const BlurInput: React.FC<{
+  value: number;
+  onCommit: (value: number) => void;
+  className?: string;
+  disabled?: boolean;
+}> = ({ value, onCommit, className, disabled }) => {
+  const [draft, setDraft] = useState(String(value));
+
+  useEffect(() => {
+    setDraft(String(value));
+  }, [value]);
+
+  const commit = () => {
+    const parsed = parseInt(draft, 10);
+    if (!Number.isNaN(parsed) && parsed >= 0 && parsed !== value) {
+      onCommit(parsed);
+    } else {
+      setDraft(String(value));
+    }
+  };
+
+  return (
+    <input
+      type="number"
+      min={0}
+      disabled={disabled}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+      }}
+      className={className}
+    />
+  );
+};
+
+const inlineInputClass =
+  'w-20 px-2 py-1 bg-slate-950 border border-slate-800 rounded text-xs text-white font-mono focus:outline-none focus:border-emerald-500';
 
 export const InventoryPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [onlyMissing, setOnlyMissing] = useState(false);
   const [showPlanner, setShowPlanner] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editTarget, setEditTarget] = useState<number>(0);
-  const [editStock, setEditStock] = useState<number>(0);
 
   // Materials query
   const { data, isLoading } = useQuery<{ items: any[]; total: number }>({
@@ -33,6 +71,12 @@ export const InventoryPage: React.FC = () => {
       const url = search ? `${endpoint}?search=${encodeURIComponent(search)}&limit=200` : `${endpoint}?limit=200`;
       return (await api.get(url)).data;
     },
+  });
+
+  // Repair/utility supplies (tracked separately, e.g. Magitek Repair Materials)
+  const { data: repairData, isLoading: repairLoading } = useQuery<{ items: any[]; total: number }>({
+    queryKey: ['inventory-repair'],
+    queryFn: async () => (await api.get('/inventory/repair?limit=100')).data,
   });
 
   // Submarine parts for the Fleet Target Planner
@@ -50,6 +94,7 @@ export const InventoryPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recipes'] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-repair'] });
       queryClient.invalidateQueries({ queryKey: ['materials'] });
     },
   });
@@ -59,6 +104,7 @@ export const InventoryPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recipes'] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-repair'] });
       queryClient.invalidateQueries({ queryKey: ['materials'] });
       alert('All raw material targets recalculated from submarine part goals!');
     },
@@ -69,7 +115,7 @@ export const InventoryPage: React.FC = () => {
       api.put(`/inventory/${id}/target`, { desiredQuantity }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
-      setEditingId(null);
+      queryClient.invalidateQueries({ queryKey: ['inventory-repair'] });
     },
   });
 
@@ -78,22 +124,12 @@ export const InventoryPage: React.FC = () => {
       api.put(`/inventory/${id}/stock`, { stock }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
-      setEditingId(null);
+      queryClient.invalidateQueries({ queryKey: ['inventory-repair'] });
     },
   });
 
-  const startEdit = (item: any) => {
-    setEditingId(item.id);
-    setEditTarget(item.desiredQuantity);
-    setEditStock(item.currentStock);
-  };
-
-  const saveEdit = (id: string) => {
-    updateTargetMutation.mutate({ id, desiredQuantity: editTarget });
-    updateStockMutation.mutate({ id, stock: editStock });
-  };
-
   const items = data?.items ?? [];
+  const repairItems = repairData?.items ?? [];
 
   return (
     <div className="space-y-6">
@@ -207,35 +243,11 @@ export const InventoryPage: React.FC = () => {
 
                     <div className="flex items-center justify-between pt-2 border-t border-slate-800/60">
                       <span className="text-[11px] text-slate-400">Target Goal:</span>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() =>
-                            updatePartTargetMutation.mutate({
-                              id: part.id,
-                              desiredStock: Math.max(0, (part.desiredStock || 0) - 1),
-                            })
-                          }
-                          className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold text-xs"
-                          title="Decrease Goal"
-                        >
-                          -
-                        </button>
-                        <span className="font-mono text-cyan-400 font-bold px-2 text-xs min-w-[24px] text-center">
-                          {part.desiredStock ?? 0}
-                        </span>
-                        <button
-                          onClick={() =>
-                            updatePartTargetMutation.mutate({
-                              id: part.id,
-                              desiredStock: (part.desiredStock || 0) + 1,
-                            })
-                          }
-                          className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold text-xs"
-                          title="Increase Goal"
-                        >
-                          +
-                        </button>
-                      </div>
+                      <BlurInput
+                        value={part.desiredStock ?? 0}
+                        onCommit={(v) => updatePartTargetMutation.mutate({ id: part.id, desiredStock: v })}
+                        className={`${inlineInputClass} text-center text-cyan-400 font-bold`}
+                      />
                     </div>
                   </div>
                 ))}
@@ -260,26 +272,25 @@ export const InventoryPage: React.FC = () => {
                 </th>
                 <th className="px-5 py-3">Deficit / Surplus</th>
                 <th className="px-5 py-3">Source</th>
-                <th className="px-5 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-8 text-center text-slate-500">
+                  <td colSpan={6} className="px-5 py-8 text-center text-slate-500">
                     Loading inventory...
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-8 text-center text-slate-500">
+                  <td colSpan={6} className="px-5 py-8 text-center text-slate-500">
                     No materials found.
                   </td>
                 </tr>
               ) : (
                 items.map((mat) => {
-                  const isEditing = editingId === mat.id;
                   const hasDeficit = mat.currentStock < mat.desiredQuantity;
+                  const isNpc = mat.whereToBuy === 'NPC';
 
                   return (
                     <tr
@@ -295,36 +306,29 @@ export const InventoryPage: React.FC = () => {
                         {mat.itemId || '—'}
                       </td>
                       <td className="px-5 py-3.5 font-mono">
-                        {isEditing ? (
-                          <input
-                            type="number"
-                            value={editStock}
-                            onChange={(e) => setEditStock(parseInt(e.target.value) || 0)}
-                            className="w-20 px-2 py-1 bg-slate-950 border border-slate-700 rounded text-xs text-white"
-                          />
-                        ) : (
+                        {isNpc ? (
                           <span
-                            className={
-                              hasDeficit
-                                ? 'text-rose-400 font-bold'
-                                : 'text-emerald-400 font-bold'
-                            }
+                            className="font-mono text-[10px] px-2 py-0.5 rounded bg-violet-500/10 border border-violet-500/20 text-violet-300 font-semibold"
+                            title="NPC-sourced — stock is always maxed out"
                           >
-                            {formatNumber(mat.currentStock)}
+                            MAX
                           </span>
+                        ) : (
+                          <BlurInput
+                            value={mat.currentStock}
+                            onCommit={(v) => updateStockMutation.mutate({ id: mat.id, stock: v })}
+                            className={`${inlineInputClass} ${
+                              hasDeficit ? 'text-rose-400 font-bold' : 'text-emerald-400 font-bold'
+                            }`}
+                          />
                         )}
                       </td>
-                      <td className="px-5 py-3.5 font-mono text-slate-300">
-                        {isEditing ? (
-                          <input
-                            type="number"
-                            value={editTarget}
-                            onChange={(e) => setEditTarget(parseInt(e.target.value) || 0)}
-                            className="w-20 px-2 py-1 bg-slate-950 border border-slate-700 rounded text-xs text-white"
-                          />
-                        ) : (
-                          formatNumber(mat.desiredQuantity)
-                        )}
+                      <td className="px-5 py-3.5">
+                        <BlurInput
+                          value={mat.desiredQuantity}
+                          onCommit={(v) => updateTargetMutation.mutate({ id: mat.id, desiredQuantity: v })}
+                          className={`${inlineInputClass} text-slate-300`}
+                        />
                       </td>
                       <td className="px-5 py-3.5">
                         {hasDeficit ? (
@@ -337,34 +341,97 @@ export const InventoryPage: React.FC = () => {
                           </span>
                         )}
                       </td>
-                      <td className="px-5 py-3.5 text-slate-400">{mat.whereToBuy}</td>
-                      <td className="px-5 py-3.5 text-right">
-                        {isEditing ? (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => saveEdit(mat.id)}
-                              className="p-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white"
-                              title="Save"
-                            >
-                              <Save className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => setEditingId(null)}
-                              className="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-400"
-                              title="Cancel"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => startEdit(mat)}
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition"
-                            title="Edit Stock/Target"
+                      <td className="px-5 py-3.5">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${sourceBadgeClass(mat.whereToBuy)}`}>
+                          {mat.whereToBuy}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ── Repair & Utility Materials (kept out of crafting inventory) ── */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+        <div className="p-4 bg-slate-950/40 border-b border-slate-800 flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
+            <Wrench className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="font-bold text-white text-xs">Repair Materials</h3>
+            <p className="text-[11px] text-slate-400">
+              Utility supplies tracked separately from the crafting inventory (e.g. Magitek Repair Materials).
+            </p>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-950/60 text-slate-400 font-semibold border-b border-slate-800 uppercase tracking-wider">
+              <tr>
+                <th className="px-5 py-3">Material Name</th>
+                <th className="px-5 py-3">FF14 Item ID</th>
+                <th className="px-5 py-3">Current Stock</th>
+                <th className="px-5 py-3">Desired Target</th>
+                <th className="px-5 py-3">Source</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {repairLoading ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
+                    Loading repair materials...
+                  </td>
+                </tr>
+              ) : repairItems.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
+                    No repair materials registered. Set a material's category to "Repair Supply" in the Recipes page to move it here.
+                  </td>
+                </tr>
+              ) : (
+                repairItems.map((mat) => {
+                  const isNpc = mat.whereToBuy === 'NPC';
+
+                  return (
+                    <tr key={mat.id} className="hover:bg-slate-800/40 transition">
+                      <td className="px-5 py-3.5 font-medium text-white">
+                        {mat.name}
+                      </td>
+                      <td className="px-5 py-3.5 font-mono text-slate-400">
+                        {mat.itemId || '—'}
+                      </td>
+                      <td className="px-5 py-3.5 font-mono">
+                        {isNpc ? (
+                          <span
+                            className="font-mono text-[10px] px-2 py-0.5 rounded bg-violet-500/10 border border-violet-500/20 text-violet-300 font-semibold"
+                            title="NPC-sourced — stock is always maxed out"
                           >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
+                            MAX
+                          </span>
+                        ) : (
+                          <BlurInput
+                            value={mat.currentStock}
+                            onCommit={(v) => updateStockMutation.mutate({ id: mat.id, stock: v })}
+                            className={`${inlineInputClass} text-emerald-400 font-bold`}
+                          />
                         )}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <BlurInput
+                          value={mat.desiredQuantity}
+                          onCommit={(v) => updateTargetMutation.mutate({ id: mat.id, desiredQuantity: v })}
+                          className={`${inlineInputClass} text-slate-300`}
+                        />
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${sourceBadgeClass(mat.whereToBuy)}`}>
+                          {mat.whereToBuy}
+                        </span>
                       </td>
                     </tr>
                   );

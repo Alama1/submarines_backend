@@ -1,3 +1,11 @@
+export type MaterialSource = 'Market' | 'Craft' | 'NPC';
+
+export const MATERIAL_SOURCES: MaterialSource[] = ['Market', 'Craft', 'NPC'];
+
+export type MaterialCategory = 'crafting' | 'repair';
+
+export const MATERIAL_CATEGORIES: MaterialCategory[] = ['crafting', 'repair'];
+
 export interface BaseMaterial {
   id: string;
   name: string;
@@ -7,7 +15,8 @@ export interface BaseMaterial {
   marketPrice?: number | null;
   myPrice?: number | null;
   npcPrice?: number | null;
-  whereToBuy: string;
+  whereToBuy: MaterialSource;
+  category: MaterialCategory;
   updatedAt: string;
 }
 
@@ -19,7 +28,8 @@ export interface CreateMaterialDto {
   marketPrice?: number;
   myPrice?: number;
   npcPrice?: number;
-  whereToBuy?: string;
+  whereToBuy?: MaterialSource;
+  category?: MaterialCategory;
 }
 
 export interface UpdateMaterialDto {
@@ -30,7 +40,8 @@ export interface UpdateMaterialDto {
   marketPrice?: number;
   myPrice?: number;
   npcPrice?: number;
-  whereToBuy?: string;
+  whereToBuy?: MaterialSource;
+  category?: MaterialCategory;
 }
 
 export interface StockStatusResponse {
