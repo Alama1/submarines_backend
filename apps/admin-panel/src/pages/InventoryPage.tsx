@@ -55,7 +55,7 @@ const BlurInput: React.FC<{
 };
 
 const inlineInputClass =
-  'w-20 px-2 py-1 bg-slate-950 border border-slate-800 rounded text-xs text-white font-mono focus:outline-none focus:border-emerald-500';
+  'w-20 px-2 py-1 bg-white border border-slate-300 rounded text-xs text-slate-900 font-mono focus:outline-none focus:border-emerald-500';
 
 export const InventoryPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -135,8 +135,8 @@ export const InventoryPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-white mb-1">Inventory & Stock Control</h2>
-          <p className="text-xs text-slate-400">
+          <h2 className="text-xl font-bold text-slate-900 mb-1">Inventory & Stock Control</h2>
+          <p className="text-xs text-slate-500">
             Raw material stock targets are calculated automatically from your Submarine Crafting Goals.
           </p>
         </div>
@@ -144,13 +144,13 @@ export const InventoryPage: React.FC = () => {
         {/* Search & Filter Bar */}
         <div className="flex items-center gap-3">
           <div className="relative">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Search materials..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500 w-56"
+              className="pl-9 pr-4 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 w-56"
             />
           </div>
 
@@ -158,8 +158,8 @@ export const InventoryPage: React.FC = () => {
             onClick={() => setOnlyMissing(!onlyMissing)}
             className={`px-3 py-2 rounded-lg text-xs font-medium border transition flex items-center gap-1.5 ${
               onlyMissing
-                ? 'bg-rose-500/20 border-rose-500/40 text-rose-300'
-                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                ? 'bg-rose-50 border-rose-200 text-rose-700'
+                : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'
             }`}
           >
             <AlertTriangle className="w-3.5 h-3.5" />
@@ -169,20 +169,20 @@ export const InventoryPage: React.FC = () => {
       </div>
 
       {/* ── Submarine Crafting Goals & Fleet Target Planner ── */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
-        <div className="p-4 bg-slate-950/40 border-b border-slate-800 flex items-center justify-between">
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="p-4 bg-slate-50/60 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
               <Layers className="w-4 h-4" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-white text-xs">Submarine Crafting Goals & Target Planner</h3>
-                <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-mono text-[10px] font-semibold">
+                <h3 className="font-bold text-slate-900 text-xs">Submarine Crafting Goals & Target Planner</h3>
+                <span className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 font-mono text-[10px] font-semibold">
                   {totalTargetedParts} Total Parts Targeted
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-500">
                 Adjust desired quantities of submarine parts to automatically calculate all required raw materials.
               </p>
             </div>
@@ -192,7 +192,7 @@ export const InventoryPage: React.FC = () => {
             <button
               onClick={() => recalculateTargetsMutation.mutate()}
               disabled={recalculateTargetsMutation.isPending}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-md transition disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-sm transition disabled:opacity-50"
               title="Recalculate and update material targets"
             >
               <Hammer className="w-3.5 h-3.5" />
@@ -200,7 +200,7 @@ export const InventoryPage: React.FC = () => {
             </button>
             <button
               onClick={() => setShowPlanner(!showPlanner)}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 transition"
+              className="p-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-500 transition"
               title="Toggle Planner"
             >
               {showPlanner ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -209,44 +209,44 @@ export const InventoryPage: React.FC = () => {
         </div>
 
         {showPlanner && (
-          <div className="p-4 bg-slate-900/60">
+          <div className="p-4 bg-slate-50/50">
             {partsLoading ? (
-              <div className="text-center py-4 text-xs text-slate-500">Loading submarine parts...</div>
+              <div className="text-center py-4 text-xs text-slate-400">Loading submarine parts...</div>
             ) : partsList.length === 0 ? (
-              <div className="text-center py-4 text-xs text-slate-500">
-                No submarine parts configured yet. Go to <a href="/recipes" className="text-emerald-400 underline">Recipes</a> to add component blueprints.
+              <div className="text-center py-4 text-xs text-slate-400">
+                No submarine parts configured yet. Go to <a href="/recipes" className="text-emerald-600 underline">Recipes</a> to add component blueprints.
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {partsList.map((part) => (
                   <div
                     key={part.id}
-                    className={`p-3 rounded-lg border transition ${
+                    className={`p-3 rounded-lg border bg-white transition ${
                       (part.desiredStock || 0) > 0
-                        ? 'bg-slate-950 border-cyan-500/40 shadow-sm'
-                        : 'bg-slate-950/60 border-slate-800/80 hover:border-slate-700'
+                        ? 'border-cyan-300 shadow-sm'
+                        : 'border-slate-200 hover:border-slate-300'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div>
-                        <div className="font-semibold text-white text-xs truncate max-w-[150px]" title={part.name}>
+                        <div className="font-semibold text-slate-900 text-xs truncate max-w-[150px]" title={part.name}>
                           {part.name}
                         </div>
                         <div className="text-[10px] text-slate-400 uppercase font-mono">
                           {part.partType} • {part.className}
                         </div>
                       </div>
-                      <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                      <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
                         {part.stock} ready
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-800/60">
-                      <span className="text-[11px] text-slate-400">Target Goal:</span>
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                      <span className="text-[11px] text-slate-500">Target Goal:</span>
                       <BlurInput
                         value={part.desiredStock ?? 0}
                         onCommit={(v) => updatePartTargetMutation.mutate({ id: part.id, desiredStock: v })}
-                        className={`${inlineInputClass} text-center text-cyan-400 font-bold`}
+                        className={`${inlineInputClass} text-center text-cyan-600 font-bold`}
                       />
                     </div>
                   </div>
@@ -258,32 +258,32 @@ export const InventoryPage: React.FC = () => {
       </div>
 
       {/* Inventory Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-950/60 text-slate-400 font-semibold border-b border-slate-800 uppercase tracking-wider">
+            <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider">
               <tr>
                 <th className="px-5 py-3">Material Name</th>
                 <th className="px-5 py-3">FF14 Item ID</th>
                 <th className="px-5 py-3">Current Stock</th>
                 <th className="px-5 py-3">
                   <span>Desired Target</span>
-                  <span className="text-[10px] text-cyan-400 font-normal lowercase block font-sans">(derived from parts)</span>
+                  <span className="text-[10px] text-cyan-600 font-normal lowercase block font-sans">(derived from parts)</span>
                 </th>
                 <th className="px-5 py-3">Deficit / Surplus</th>
                 <th className="px-5 py-3">Source</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800">
+            <tbody className="divide-y divide-slate-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-slate-500">
+                  <td colSpan={6} className="px-5 py-8 text-center text-slate-400">
                     Loading inventory...
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-slate-500">
+                  <td colSpan={6} className="px-5 py-8 text-center text-slate-400">
                     No materials found.
                   </td>
                 </tr>
@@ -295,11 +295,11 @@ export const InventoryPage: React.FC = () => {
                   return (
                     <tr
                       key={mat.id}
-                      className={`hover:bg-slate-800/40 transition ${
-                        hasDeficit ? 'bg-rose-950/10' : ''
+                      className={`hover:bg-slate-50 transition ${
+                        hasDeficit ? 'bg-rose-50/50' : ''
                       }`}
                     >
-                      <td className="px-5 py-3.5 font-medium text-white">
+                      <td className="px-5 py-3.5 font-medium text-slate-900">
                         {mat.name}
                       </td>
                       <td className="px-5 py-3.5 font-mono text-slate-400">
@@ -308,7 +308,7 @@ export const InventoryPage: React.FC = () => {
                       <td className="px-5 py-3.5 font-mono">
                         {isNpc ? (
                           <span
-                            className="font-mono text-[10px] px-2 py-0.5 rounded bg-violet-500/10 border border-violet-500/20 text-violet-300 font-semibold"
+                            className="font-mono text-[10px] px-2 py-0.5 rounded bg-violet-50 border border-violet-200 text-violet-700 font-semibold"
                             title="NPC-sourced — stock is always maxed out"
                           >
                             MAX
@@ -318,7 +318,7 @@ export const InventoryPage: React.FC = () => {
                             value={mat.currentStock}
                             onCommit={(v) => updateStockMutation.mutate({ id: mat.id, stock: v })}
                             className={`${inlineInputClass} ${
-                              hasDeficit ? 'text-rose-400 font-bold' : 'text-emerald-400 font-bold'
+                              hasDeficit ? 'text-rose-600 font-bold' : 'text-emerald-600 font-bold'
                             }`}
                           />
                         )}
@@ -327,16 +327,16 @@ export const InventoryPage: React.FC = () => {
                         <BlurInput
                           value={mat.desiredQuantity}
                           onCommit={(v) => updateTargetMutation.mutate({ id: mat.id, desiredQuantity: v })}
-                          className={`${inlineInputClass} text-slate-300`}
+                          className={`${inlineInputClass} text-slate-700`}
                         />
                       </td>
                       <td className="px-5 py-3.5">
                         {hasDeficit ? (
-                          <span className="font-mono text-xs px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-400 font-semibold">
+                          <span className="font-mono text-xs px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-semibold">
                             -{formatNumber(mat.desiredQuantity - mat.currentStock)}
                           </span>
                         ) : (
-                          <span className="font-mono text-xs px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                          <span className="font-mono text-xs px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700">
                             +OK
                           </span>
                         )}
@@ -356,14 +356,14 @@ export const InventoryPage: React.FC = () => {
       </div>
 
       {/* ── Repair & Utility Materials (kept out of crafting inventory) ── */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
-        <div className="p-4 bg-slate-950/40 border-b border-slate-800 flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="p-4 bg-slate-50/60 border-b border-slate-200 flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-violet-50 border border-violet-200 flex items-center justify-center text-violet-600">
             <Wrench className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="font-bold text-white text-xs">Repair Materials</h3>
-            <p className="text-[11px] text-slate-400">
+            <h3 className="font-bold text-slate-900 text-xs">Repair Materials</h3>
+            <p className="text-[11px] text-slate-500">
               Utility supplies tracked separately from the crafting inventory (e.g. Magitek Repair Materials).
             </p>
           </div>
@@ -371,7 +371,7 @@ export const InventoryPage: React.FC = () => {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-950/60 text-slate-400 font-semibold border-b border-slate-800 uppercase tracking-wider">
+            <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider">
               <tr>
                 <th className="px-5 py-3">Material Name</th>
                 <th className="px-5 py-3">FF14 Item ID</th>
@@ -380,16 +380,16 @@ export const InventoryPage: React.FC = () => {
                 <th className="px-5 py-3">Source</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800">
+            <tbody className="divide-y divide-slate-200">
               {repairLoading ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
+                  <td colSpan={5} className="px-5 py-8 text-center text-slate-400">
                     Loading repair materials...
                   </td>
                 </tr>
               ) : repairItems.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
+                  <td colSpan={5} className="px-5 py-8 text-center text-slate-400">
                     No repair materials registered. Set a material's category to "Repair Supply" in the Recipes page to move it here.
                   </td>
                 </tr>
@@ -398,8 +398,8 @@ export const InventoryPage: React.FC = () => {
                   const isNpc = mat.whereToBuy === 'NPC';
 
                   return (
-                    <tr key={mat.id} className="hover:bg-slate-800/40 transition">
-                      <td className="px-5 py-3.5 font-medium text-white">
+                    <tr key={mat.id} className="hover:bg-slate-50 transition">
+                      <td className="px-5 py-3.5 font-medium text-slate-900">
                         {mat.name}
                       </td>
                       <td className="px-5 py-3.5 font-mono text-slate-400">
@@ -408,7 +408,7 @@ export const InventoryPage: React.FC = () => {
                       <td className="px-5 py-3.5 font-mono">
                         {isNpc ? (
                           <span
-                            className="font-mono text-[10px] px-2 py-0.5 rounded bg-violet-500/10 border border-violet-500/20 text-violet-300 font-semibold"
+                            className="font-mono text-[10px] px-2 py-0.5 rounded bg-violet-50 border border-violet-200 text-violet-700 font-semibold"
                             title="NPC-sourced — stock is always maxed out"
                           >
                             MAX
@@ -417,7 +417,7 @@ export const InventoryPage: React.FC = () => {
                           <BlurInput
                             value={mat.currentStock}
                             onCommit={(v) => updateStockMutation.mutate({ id: mat.id, stock: v })}
-                            className={`${inlineInputClass} text-emerald-400 font-bold`}
+                            className={`${inlineInputClass} text-emerald-600 font-bold`}
                           />
                         )}
                       </td>
@@ -425,7 +425,7 @@ export const InventoryPage: React.FC = () => {
                         <BlurInput
                           value={mat.desiredQuantity}
                           onCommit={(v) => updateTargetMutation.mutate({ id: mat.id, desiredQuantity: v })}
-                          className={`${inlineInputClass} text-slate-300`}
+                          className={`${inlineInputClass} text-slate-700`}
                         />
                       </td>
                       <td className="px-5 py-3.5">

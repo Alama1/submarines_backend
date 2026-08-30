@@ -266,19 +266,19 @@ export const RecipesPage: React.FC = () => {
       {/* Top Header & Tab switcher */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-white mb-1">Crafting Recipes & Materials</h2>
-          <p className="text-xs text-slate-400">
+          <h2 className="text-xl font-bold text-slate-900 mb-1">Crafting Recipes & Materials</h2>
+          <p className="text-xs text-slate-500">
             Define submarine components, material ingredients, and FF14 item IDs for live inventory sync.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 bg-slate-900 p-1 rounded-xl border border-slate-800">
+        <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl border border-slate-200">
           <button
             onClick={() => setActiveTab('parts')}
             className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition ${
               activeTab === 'parts'
-                ? 'bg-emerald-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-slate-500 hover:text-slate-900'
             }`}
           >
             <Hammer className="w-3.5 h-3.5" />
@@ -288,8 +288,8 @@ export const RecipesPage: React.FC = () => {
             onClick={() => setActiveTab('materials')}
             className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition ${
               activeTab === 'materials'
-                ? 'bg-emerald-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-slate-500 hover:text-slate-900'
             }`}
           >
             <Boxes className="w-3.5 h-3.5" />
@@ -303,22 +303,22 @@ export const RecipesPage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
             <div className="flex justify-between items-center gap-2">
-              <span className="text-xs text-slate-400 font-medium">
+              <span className="text-xs text-slate-500 font-medium">
                 Showing {partsList.length} component blueprints
               </span>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => recalculateTargetsMutation.mutate()}
                   disabled={recalculateTargetsMutation.isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs border border-slate-700 transition"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs border border-slate-300 transition"
                   title="Recalculate Raw Material Target Stock from Part Goals"
                 >
-                  <Hammer className="w-3.5 h-3.5 text-emerald-400" />
+                  <Hammer className="w-3.5 h-3.5 text-emerald-600" />
                   <span>{recalculateTargetsMutation.isPending ? 'Recalculating...' : 'Sync Raw Material Targets'}</span>
                 </button>
                 <button
                   onClick={openNewPart}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs shadow-md transition"
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs shadow-sm transition"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add Submarine Part</span>
@@ -326,10 +326,10 @@ export const RecipesPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-950/60 text-slate-400 font-semibold border-b border-slate-800 uppercase tracking-wider">
+                  <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider">
                     <tr>
                       <th className="px-4 py-3">Part Name</th>
                       <th className="px-4 py-3">Type</th>
@@ -340,42 +340,42 @@ export const RecipesPage: React.FC = () => {
                       <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800">
+                  <tbody className="divide-y divide-slate-200">
                     {partsLoading ? (
                       <tr>
-                        <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                        <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                           Loading submarine parts...
                         </td>
                       </tr>
                     ) : partsList.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                        <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                           No submarine parts added yet. Click "Add Submarine Part" to create your first component.
                         </td>
                       </tr>
                     ) : (
                       partsList.map((part) => (
-                        <tr key={part.id} className="hover:bg-slate-800/40 transition">
+                        <tr key={part.id} className="hover:bg-slate-50 transition">
                           <td className="px-4 py-3">
-                            <div className="font-semibold text-white">{part.name}</div>
-                            <div className="text-[11px] text-slate-500 font-mono">
+                            <div className="font-semibold text-slate-900">{part.name}</div>
+                            <div className="text-[11px] text-slate-400 font-mono">
                               Slug: {part.id} {part.itemId ? `(FF14: #${part.itemId})` : ''}
                             </div>
                           </td>
-                          <td className="px-4 py-3 uppercase text-slate-300 font-mono">
+                          <td className="px-4 py-3 uppercase text-slate-600 font-mono">
                             {part.partType}
                           </td>
-                          <td className="px-4 py-3 font-mono text-cyan-400 font-bold text-center">
+                          <td className="px-4 py-3 font-mono text-cyan-600 font-bold text-center">
                             {part.desiredStock ?? 0}
                           </td>
-                          <td className="px-4 py-3 font-mono text-emerald-400 font-bold">
+                          <td className="px-4 py-3 font-mono text-emerald-600 font-bold">
                             {part.stock} ready
                           </td>
-                          <td className="px-4 py-3 text-slate-400">
+                          <td className="px-4 py-3 text-slate-500">
                             <div>{(part.materials ?? []).length} materials</div>
                             {(part.expandedMaterials?.length ?? 0) > (part.materials ?? []).length && (
                               <div
-                                className="text-[11px] text-slate-500"
+                                className="text-[11px] text-slate-400"
                                 title={(part.expandedMaterials ?? [])
                                   .map((m) => `${m.name} x${m.quantity}`)
                                   .join(', ')}
@@ -384,20 +384,20 @@ export const RecipesPage: React.FC = () => {
                               </div>
                             )}
                           </td>
-                          <td className="px-4 py-3 font-mono text-slate-200">
+                          <td className="px-4 py-3 font-mono text-slate-700">
                             {formatGil(part.price)}
                           </td>
                           <td className="px-4 py-3 text-right space-x-1.5">
                             <button
                               onClick={() => openEditPart(part)}
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                              className="p-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-500 transition"
                               title="Edit Part"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={() => deletePartMutation.mutate(part.id)}
-                              className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition"
+                              className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition"
                               title="Delete Part"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -413,27 +413,27 @@ export const RecipesPage: React.FC = () => {
           </div>
 
           {/* Part Editor Drawer / Form */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="font-semibold text-white text-sm">
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="font-semibold text-slate-900 text-sm">
                 {isEditingPart ? (selectedPart ? 'Edit Component' : 'New Component') : 'Component Inspector'}
               </h3>
               {isEditingPart && (
-                <button onClick={() => setIsEditingPart(false)} className="text-slate-400 hover:text-slate-200">
+                <button onClick={() => setIsEditingPart(false)} className="text-slate-400 hover:text-slate-600">
                   <X className="w-4 h-4" />
                 </button>
               )}
             </div>
 
             {partError && (
-              <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
+              <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 <span>{partError}</span>
               </div>
             )}
 
             {partSuccess && (
-              <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2">
+              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
                 <span>{partSuccess}</span>
               </div>
@@ -442,7 +442,7 @@ export const RecipesPage: React.FC = () => {
             {isEditingPart ? (
               <form onSubmit={handlePartSubmit} className="space-y-3 text-xs">
                 <div>
-                  <label className="block text-slate-400 mb-1">Unique Slug ID (e.g. shark_hull)</label>
+                  <label className="block text-slate-600 mb-1">Unique Slug ID (e.g. shark_hull)</label>
                   <input
                     type="text"
                     required
@@ -450,40 +450,40 @@ export const RecipesPage: React.FC = () => {
                     value={partId}
                     onChange={(e) => setPartId(e.target.value)}
                     placeholder="shark_hull"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono placeholder:text-slate-600 disabled:opacity-50"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono placeholder:text-slate-400 disabled:opacity-50"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-400 mb-1">Component Display Name</label>
+                  <label className="block text-slate-600 mb-1">Component Display Name</label>
                   <input
                     type="text"
                     required
                     value={partName}
                     onChange={(e) => setPartName(e.target.value)}
                     placeholder="Shark-class Pressure Hull"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-400 mb-1">FF14 Item ID (for retainer sync)</label>
+                  <label className="block text-slate-600 mb-1">FF14 Item ID (for retainer sync)</label>
                   <input
                     type="number"
                     placeholder="e.g. 26509"
                     value={partItemId}
                     onChange={(e) => setPartItemId(e.target.value === '' ? '' : parseInt(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-slate-400 mb-1">Part Type</label>
+                    <label className="block text-slate-600 mb-1">Part Type</label>
                     <select
                       value={partType}
                       onChange={(e) => setPartType(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900"
                     >
                       <option value="hull">Hull</option>
                       <option value="stern">Stern</option>
@@ -492,38 +492,38 @@ export const RecipesPage: React.FC = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-slate-400 mb-1">Class Name</label>
+                    <label className="block text-slate-600 mb-1">Class Name</label>
                     <input
                       type="text"
                       value={className}
                       onChange={(e) => setClassName(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-slate-400 mb-1">Sale Price (Gil)</label>
+                    <label className="block text-slate-600 mb-1">Sale Price (Gil)</label>
                     <input
                       type="number"
                       required
                       value={price}
                       onChange={(e) => setPrice(parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono"
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono"
                     />
                   </div>
                   <div>
-                    <label className="block text-slate-400 mb-1">
+                    <label className="block text-slate-600 mb-1">
                       <span>Target Goal Stock</span>
-                      <span className="text-[10px] text-cyan-400 font-mono ml-1">(units)</span>
+                      <span className="text-[10px] text-cyan-600 font-mono ml-1">(units)</span>
                     </label>
                     <input
                       type="number"
                       min="0"
                       value={desiredStock}
                       onChange={(e) => setDesiredStock(parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono"
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono"
                     />
                   </div>
                 </div>
@@ -534,21 +534,21 @@ export const RecipesPage: React.FC = () => {
                     id="isModified"
                     checked={isModified}
                     onChange={(e) => setIsModified(e.target.checked)}
-                    className="rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-0"
+                    className="rounded bg-white border-slate-300 text-emerald-600 focus:ring-0"
                   />
-                  <label htmlFor="isModified" className="text-slate-300">
+                  <label htmlFor="isModified" className="text-slate-700">
                     Modified (Mk. II version)
                   </label>
                 </div>
 
                 {/* Recipe Materials Requirements */}
-                <div className="pt-3 border-t border-slate-800 space-y-2">
+                <div className="pt-3 border-t border-slate-200 space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-slate-300 font-semibold">Required Raw Materials</label>
+                    <label className="text-slate-700 font-semibold">Required Raw Materials</label>
                     <button
                       type="button"
                       onClick={addPartMaterialRow}
-                      className="text-xs text-emerald-400 hover:text-emerald-300 font-medium"
+                      className="text-xs text-emerald-600 hover:text-emerald-700 font-medium"
                     >
                       + Add Ingredient
                     </button>
@@ -564,7 +564,7 @@ export const RecipesPage: React.FC = () => {
                             updated[idx].materialId = e.target.value;
                             setPartMaterials(updated);
                           }}
-                          className="flex-1 px-2 py-1.5 bg-slate-950 border border-slate-700 rounded text-xs text-white"
+                          className="flex-1 px-2 py-1.5 bg-white border border-slate-300 rounded text-xs text-slate-900"
                         >
                           {allMaterials.map((m) => (
                             <option key={m.id} value={m.id}>
@@ -581,25 +581,25 @@ export const RecipesPage: React.FC = () => {
                             updated[idx].quantity = parseInt(e.target.value) || 1;
                             setPartMaterials(updated);
                           }}
-                          className="w-16 px-2 py-1.5 bg-slate-950 border border-slate-700 rounded text-xs text-white font-mono"
+                          className="w-16 px-2 py-1.5 bg-white border border-slate-300 rounded text-xs text-slate-900 font-mono"
                         />
                         <button
                           type="button"
                           onClick={() => removePartMaterialRow(idx)}
-                          className="text-slate-500 hover:text-rose-400 p-1"
+                          className="text-slate-400 hover:text-rose-600 p-1"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     ))}
                     {partMaterials.length === 0 && (
-                      <p className="text-[11px] text-slate-500 italic">No materials assigned to this recipe.</p>
+                      <p className="text-[11px] text-slate-400 italic">No materials assigned to this recipe.</p>
                     )}
                   </div>
 
                   {selectedPart && (selectedPart.expandedMaterials?.length ?? 0) > partMaterials.length && (
-                    <div className="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800">
-                      <p className="text-[11px] text-slate-400 font-semibold mb-1">
+                    <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                      <p className="text-[11px] text-slate-600 font-semibold mb-1">
                         Full crafting chain (incl. base part materials):
                       </p>
                       <p className="text-[11px] text-slate-500 leading-relaxed">
@@ -615,14 +615,14 @@ export const RecipesPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={savePartMutation.isPending}
-                    className="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition shadow-md disabled:opacity-50"
+                    className="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition shadow-sm disabled:opacity-50"
                   >
                     {savePartMutation.isPending ? 'Saving...' : 'Save Part Recipe'}
                   </button>
                 </div>
               </form>
             ) : (
-              <div className="text-center py-10 text-slate-500 text-xs">
+              <div className="text-center py-10 text-slate-400 text-xs">
                 Select a submarine part from the table or click "Add Submarine Part" to create a new blueprint.
               </div>
             )}
@@ -635,22 +635,22 @@ export const RecipesPage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-xs text-slate-400 font-medium">
+              <span className="text-xs text-slate-500 font-medium">
                 Showing {allMaterials.length} materials in database
               </span>
               <button
                 onClick={openNewMat}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs shadow-md transition"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs shadow-sm transition"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Base Material</span>
               </button>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-950/60 text-slate-400 font-semibold border-b border-slate-800 uppercase tracking-wider">
+                  <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider">
                     <tr>
                       <th className="px-4 py-3">Material Name</th>
                       <th className="px-4 py-3">FF14 Item ID</th>
@@ -661,27 +661,27 @@ export const RecipesPage: React.FC = () => {
                       <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800">
+                  <tbody className="divide-y divide-slate-200">
                     {matsLoading ? (
                       <tr>
-                        <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                        <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                           Loading materials...
                         </td>
                       </tr>
                     ) : allMaterials.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                        <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                           No materials registered yet. Click "Add Base Material" to start building your catalogue.
                         </td>
                       </tr>
                     ) : (
                       allMaterials.map((mat) => (
-                        <tr key={mat.id} className="hover:bg-slate-800/40 transition">
-                          <td className="px-4 py-3 font-semibold text-white">
+                        <tr key={mat.id} className="hover:bg-slate-50 transition">
+                          <td className="px-4 py-3 font-semibold text-slate-900">
                             <div className="flex items-center gap-2">
                               {mat.name}
                               {mat.category === 'repair' && (
-                                <span className="px-1.5 py-0.5 rounded bg-violet-500/10 border border-violet-500/20 text-violet-300 text-[10px] font-semibold uppercase tracking-wide">
+                                <span className="px-1.5 py-0.5 rounded bg-violet-50 border border-violet-200 text-violet-700 text-[10px] font-semibold uppercase tracking-wide">
                                   Repair
                                 </span>
                               )}
@@ -690,17 +690,17 @@ export const RecipesPage: React.FC = () => {
                           <td className="px-4 py-3 font-mono text-slate-400">
                             {mat.itemId || '—'}
                           </td>
-                          <td className="px-4 py-3 font-mono text-slate-200">
+                          <td className="px-4 py-3 font-mono text-slate-700">
                             {formatNumber(mat.desiredQuantity)}
                           </td>
                           <td className="px-4 py-3 font-mono">
                             {mat.myPrice != null ? (
-                              <span className="text-amber-400 font-semibold">{formatGil(mat.myPrice)}</span>
+                              <span className="text-amber-600 font-semibold">{formatGil(mat.myPrice)}</span>
                             ) : (
-                              <span className="text-slate-600">—</span>
+                              <span className="text-slate-300">—</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 font-mono text-slate-400">
+                          <td className="px-4 py-3 font-mono text-slate-500">
                             {mat.npcPrice != null ? formatGil(mat.npcPrice) : '—'}
                           </td>
                           <td className="px-4 py-3">
@@ -711,14 +711,14 @@ export const RecipesPage: React.FC = () => {
                           <td className="px-4 py-3 text-right space-x-1.5">
                             <button
                               onClick={() => openEditMat(mat)}
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                              className="p-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-500 transition"
                               title="Edit Material"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={() => deleteMatMutation.mutate(mat.id)}
-                              className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition"
+                              className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition"
                               title="Delete Material"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -734,27 +734,27 @@ export const RecipesPage: React.FC = () => {
           </div>
 
           {/* Material Editor Panel */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="font-semibold text-white text-sm">
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="font-semibold text-slate-900 text-sm">
                 {isEditingMat ? (selectedMat ? 'Edit Material' : 'New Base Material') : 'Material Inspector'}
               </h3>
               {isEditingMat && (
-                <button onClick={() => setIsEditingMat(false)} className="text-slate-400 hover:text-slate-200">
+                <button onClick={() => setIsEditingMat(false)} className="text-slate-400 hover:text-slate-600">
                   <X className="w-4 h-4" />
                 </button>
               )}
             </div>
 
             {matError && (
-              <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
+              <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 <span>{matError}</span>
               </div>
             )}
 
             {matSuccess && (
-              <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2">
+              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
                 <span>{matSuccess}</span>
               </div>
@@ -763,73 +763,73 @@ export const RecipesPage: React.FC = () => {
             {isEditingMat ? (
               <form onSubmit={handleMatSubmit} className="space-y-3 text-xs">
                 <div>
-                  <label className="block text-slate-400 mb-1">In-Game Material Name</label>
+                  <label className="block text-slate-600 mb-1">In-Game Material Name</label>
                   <input
                     type="text"
                     required
                     value={matName}
                     onChange={(e) => setMatName(e.target.value)}
                     placeholder="e.g. Darksteel Ingot"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-400 mb-1">Universalis / FF14 Item ID</label>
+                  <label className="block text-slate-600 mb-1">Universalis / FF14 Item ID</label>
                   <input
                     type="number"
                     placeholder="e.g. 5060"
                     value={matItemId}
                     onChange={(e) => setMatItemId(e.target.value === '' ? '' : parseInt(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-400 mb-1">Desired Target Stock</label>
+                  <label className="block text-slate-600 mb-1">Desired Target Stock</label>
                   <input
                     type="number"
                     required
                     value={desiredQuantity}
                     onChange={(e) => setDesiredQuantity(parseInt(e.target.value) || 0)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-400 mb-1">
+                  <label className="block text-slate-600 mb-1">
                     <span>My Price Override (Gil)</span>
-                    <span className="text-[10px] text-slate-500 ml-1.5">(Custom valuation)</span>
+                    <span className="text-[10px] text-slate-400 ml-1.5">(Custom valuation)</span>
                   </label>
                   <input
                     type="number"
                     placeholder="e.g. 450"
                     value={myPrice}
                     onChange={(e) => setMyPrice(e.target.value === '' ? '' : parseInt(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-400 mb-1">
+                  <label className="block text-slate-600 mb-1">
                     <span>NPC Vendor Buy Price (Gil)</span>
-                    <span className="text-[10px] text-slate-500 ml-1.5">(Nullable)</span>
+                    <span className="text-[10px] text-slate-400 ml-1.5">(Nullable)</span>
                   </label>
                   <input
                     type="number"
                     placeholder="Leave empty if vendor unavailable"
                     value={npcPrice}
                     onChange={(e) => setNpcPrice(e.target.value === '' ? '' : parseInt(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-400 mb-1">Primary Acquisition Source</label>
+                  <label className="block text-slate-600 mb-1">Primary Acquisition Source</label>
                   <select
                     value={whereToBuy}
                     onChange={(e) => setWhereToBuy(e.target.value as MaterialSource)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900"
                   >
                     {MATERIAL_SOURCES.map((s) => (
                       <option key={s} value={s}>
@@ -838,18 +838,18 @@ export const RecipesPage: React.FC = () => {
                     ))}
                   </select>
                   {whereToBuy === 'NPC' && (
-                    <p className="mt-1 text-[10px] text-violet-300">
+                    <p className="mt-1 text-[10px] text-violet-600">
                       NPC-sourced items are always stocked to the max.
                     </p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-slate-400 mb-1">Inventory Category</label>
+                  <label className="block text-slate-600 mb-1">Inventory Category</label>
                   <select
                     value={matCategory}
                     onChange={(e) => setMatCategory(e.target.value as MaterialCategory)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900"
                   >
                     <option value="crafting">Crafting Material</option>
                     <option value="repair">Repair Supply (separate section)</option>
@@ -860,14 +860,14 @@ export const RecipesPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={saveMatMutation.isPending}
-                    className="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition shadow-md disabled:opacity-50"
+                    className="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition shadow-sm disabled:opacity-50"
                   >
                     {saveMatMutation.isPending ? 'Saving...' : 'Save Base Material'}
                   </button>
                 </div>
               </form>
             ) : (
-              <div className="text-center py-10 text-slate-500 text-xs">
+              <div className="text-center py-10 text-slate-400 text-xs">
                 Select a material from the table or click "Add Base Material" to register a new raw item into the database.
               </div>
             )}

@@ -26,7 +26,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-xs text-slate-500">
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center text-xs text-slate-500">
         Authenticating Workshop Admin...
       </div>
     );
@@ -38,11 +38,11 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   if (authError) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <p className="text-sm text-rose-400 max-w-md">{authError}</p>
+      <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center gap-4 p-6 text-center">
+        <p className="text-sm text-rose-600 max-w-md">{authError}</p>
         <button
           onClick={() => logout()}
-          className="px-4 py-2 rounded-lg bg-slate-800 text-slate-200 text-sm hover:bg-slate-700"
+          className="px-4 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 text-sm hover:bg-slate-50"
         >
           Sign out
         </button>
@@ -52,7 +52,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   if (!backendAuthorized) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-xs text-slate-500">
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center text-xs text-slate-500">
         Checking admin allowlist...
       </div>
     );

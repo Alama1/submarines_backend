@@ -41,88 +41,88 @@ export const DashboardPage: React.FC = () => {
     <div className="space-y-8">
       {/* Top Welcome & KPI cards */}
       <div>
-        <h2 className="text-xl font-bold text-white mb-1">Workshop Operations Dashboard</h2>
-        <p className="text-xs text-slate-400">
+        <h2 className="text-xl font-bold text-slate-900 mb-1">Workshop Operations Dashboard</h2>
+        <p className="text-xs text-slate-500">
           Real-time submarine fabrication tracker and inventory monitor.
         </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-medium text-slate-400">Active Crafts</span>
-            <div className="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center">
+            <span className="text-xs font-medium text-slate-500">Active Crafts</span>
+            <div className="w-8 h-8 rounded-lg bg-cyan-50 text-cyan-600 flex items-center justify-center">
               <Hammer className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-white">{orders.length}</div>
-          <p className="text-xs text-cyan-400/80 mt-1">Simultaneous builds</p>
+          <div className="text-2xl font-bold text-slate-900">{orders.length}</div>
+          <p className="text-xs text-cyan-600 mt-1">Simultaneous builds</p>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-medium text-slate-400">Pending Orders</span>
-            <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
+            <span className="text-xs font-medium text-slate-500">Pending Orders</span>
+            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
               <Clock className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-white">
+          <div className="text-2xl font-bold text-slate-900">
             {pendingOrders?.total ?? 0}
           </div>
-          <p className="text-xs text-amber-400/80 mt-1">Awaiting confirmation</p>
+          <p className="text-xs text-amber-600 mt-1">Awaiting confirmation</p>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-medium text-slate-400">Stock Deficits</span>
-            <div className="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center">
+            <span className="text-xs font-medium text-slate-500">Stock Deficits</span>
+            <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
               <AlertTriangle className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-white">
+          <div className="text-2xl font-bold text-slate-900">
             {missingStock?.total ?? 0}
           </div>
-          <p className="text-xs text-rose-400/80 mt-1">Materials below target</p>
+          <p className="text-xs text-rose-600 mt-1">Materials below target</p>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-medium text-slate-400">Plugin Sync</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+            <span className="text-xs font-medium text-slate-500">Plugin Sync</span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-emerald-400">Live</div>
-          <p className="text-xs text-slate-400 mt-1">Retainer bags updated</p>
+          <div className="text-2xl font-bold text-emerald-600">Live</div>
+          <p className="text-xs text-slate-500 mt-1">Retainer bags updated</p>
         </div>
       </div>
 
       {/* Live In-Progress Fabrication Section */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm space-y-6">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-4">
           <div>
-            <h3 className="font-semibold text-white text-base flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
+            <h3 className="font-semibold text-slate-900 text-base flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 animate-ping"></span>
               Live Order Progress (In-Progress Builds)
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5">
               Refreshed automatically every 10 seconds. Live stock from your retainers vs ordered quantities.
             </p>
           </div>
-          <span className="text-xs px-2.5 py-1 rounded bg-slate-800 text-slate-400 font-mono">
+          <span className="text-xs px-2.5 py-1 rounded bg-slate-100 text-slate-500 font-mono">
             {orders.length} in crafting
           </span>
         </div>
 
         {inProgressLoading ? (
-          <div className="text-center py-12 text-slate-500 text-xs">
+          <div className="text-center py-12 text-slate-400 text-xs">
             Loading crafting progress...
           </div>
         ) : orders.length === 0 ? (
-          <div className="text-center py-12 text-slate-500 space-y-2">
-            <ShoppingCart className="w-8 h-8 mx-auto text-slate-600" />
+          <div className="text-center py-12 text-slate-400 space-y-2">
+            <ShoppingCart className="w-8 h-8 mx-auto text-slate-300" />
             <p className="text-sm">No orders currently marked as in-progress.</p>
-            <p className="text-xs text-slate-600">
+            <p className="text-xs text-slate-400">
               Confirm pending orders or change order status to "in_progress" in the Orders tab.
             </p>
           </div>
@@ -142,37 +142,37 @@ export const DashboardPage: React.FC = () => {
               return (
                 <div
                   key={order.id}
-                  className="bg-slate-950 border border-slate-800/90 rounded-xl p-5 space-y-4 hover:border-slate-700 transition"
+                  className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4 hover:border-slate-300 transition"
                 >
                   {/* Order header */}
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
+                        <span className="font-mono text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                           {order.orderCode}
                         </span>
-                        <h4 className="font-semibold text-white text-sm">
+                        <h4 className="font-semibold text-slate-900 text-sm">
                           {order.clientName}
                         </h4>
                       </div>
                       {order.contactInfo && (
-                        <p className="text-xs text-slate-400 mt-1">
-                          Contact: <span className="text-slate-300">{order.contactInfo}</span>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Contact: <span className="text-slate-700">{order.contactInfo}</span>
                         </p>
                       )}
                     </div>
                     <div className="text-right">
-                      <span className="text-xs font-bold text-cyan-400">
+                      <span className="text-xs font-bold text-cyan-600">
                         {overallPct}%
                       </span>
-                      <p className="text-[10px] text-slate-500">
+                      <p className="text-[10px] text-slate-400">
                         {totalCrafted} / {totalOrdered} parts
                       </p>
                     </div>
                   </div>
 
                   {/* Overall progress bar */}
-                  <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
                     <div
                       className="bg-gradient-to-r from-cyan-500 to-emerald-500 h-full rounded-full transition-all duration-500"
                       style={{ width: `${overallPct}%` }}
@@ -191,28 +191,28 @@ export const DashboardPage: React.FC = () => {
                       return (
                         <div key={idx} className="space-y-1">
                           <div className="flex items-center justify-between text-xs">
-                            <span className="text-slate-300 flex items-center gap-1.5 font-medium">
+                            <span className="text-slate-700 flex items-center gap-1.5 font-medium">
                               {isComplete ? (
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
                               ) : (
-                                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 flex-shrink-0"></span>
+                                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 flex-shrink-0"></span>
                               )}
                               {item.partName}
                             </span>
                             <span
                               className={`font-mono text-xs ${
                                 isComplete
-                                  ? 'text-emerald-400 font-bold'
-                                  : 'text-slate-400'
+                                  ? 'text-emerald-600 font-bold'
+                                  : 'text-slate-500'
                               }`}
                             >
                               {item.stock} / {item.quantity}
                             </span>
                           </div>
-                          <div className="w-full bg-slate-800/80 h-1.5 rounded-full overflow-hidden">
+                          <div className="w-full bg-slate-200/80 h-1.5 rounded-full overflow-hidden">
                             <div
                               className={`h-full rounded-full transition-all duration-500 ${
-                                isComplete ? 'bg-emerald-400' : 'bg-cyan-500'
+                                isComplete ? 'bg-emerald-500' : 'bg-cyan-500'
                               }`}
                               style={{ width: `${itemPct}%` }}
                             />
@@ -223,7 +223,7 @@ export const DashboardPage: React.FC = () => {
                   </div>
 
                   {order.notes && (
-                    <p className="text-[11px] text-slate-400 bg-slate-900/80 p-2.5 rounded border border-slate-800/60 italic">
+                    <p className="text-[11px] text-slate-500 bg-white p-2.5 rounded border border-slate-200 italic">
                       "{order.notes}"
                     </p>
                   )}
@@ -235,46 +235,46 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* Lower Row: Missing Materials Quick List */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm space-y-4">
+      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-semibold text-white text-sm">
+            <h3 className="font-semibold text-slate-900 text-sm">
               Top Material Deficits
             </h3>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500">
               Raw materials in high demand across your workshop.
             </p>
           </div>
           <a
             href="/inventory"
-            className="text-xs text-emerald-400 hover:text-emerald-300 font-medium"
+            className="text-xs text-emerald-600 hover:text-emerald-700 font-medium"
           >
             View Full Inventory →
           </a>
         </div>
 
-        <div className="divide-y divide-slate-800">
+        <div className="divide-y divide-slate-100">
           {(missingStock?.items ?? []).map((mat: any) => (
             <div
               key={mat.id}
               className="py-3 flex items-center justify-between text-xs"
             >
               <div>
-                <span className="font-medium text-slate-200">{mat.name}</span>
-                <span className="text-slate-500 ml-2">({mat.whereToBuy})</span>
+                <span className="font-medium text-slate-800">{mat.name}</span>
+                <span className="text-slate-400 ml-2">({mat.whereToBuy})</span>
               </div>
               <div className="flex items-center gap-4">
-                <span className="text-slate-400">
-                  Stock: <strong className="text-slate-200">{formatNumber(mat.currentStock)}</strong> / {formatNumber(mat.desiredQuantity)}
+                <span className="text-slate-500">
+                  Stock: <strong className="text-slate-800">{formatNumber(mat.currentStock)}</strong> / {formatNumber(mat.desiredQuantity)}
                 </span>
-                <span className="font-mono px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-400 font-bold">
+                <span className="font-mono px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-bold">
                   Deficit: -{formatNumber(mat.deficit)}
                 </span>
               </div>
             </div>
           ))}
           {(missingStock?.items?.length ?? 0) === 0 && (
-            <div className="py-6 text-center text-slate-500 text-xs">
+            <div className="py-6 text-center text-slate-400 text-xs">
               All materials currently meet or exceed target inventory levels. 🎉
             </div>
           )}

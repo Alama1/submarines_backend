@@ -24,31 +24,31 @@ export const LoginPage: React.FC = () => {
   const error = localError || authError;
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
-      <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl text-center">
-        <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mx-auto mb-5 shadow-inner">
+    <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-8 shadow-sm text-center">
+        <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 mx-auto mb-5">
           <Anchor className="w-8 h-8" />
         </div>
 
-        <h1 className="text-2xl font-bold text-white mb-2">FF14 Submarines Admin</h1>
-        <p className="text-sm text-slate-400 mb-8">
+        <h1 className="text-2xl font-bold text-slate-900 mb-2">FF14 Submarines Admin</h1>
+        <p className="text-sm text-slate-500 mb-8">
           Restricted management console. Sign in with your authorized admin account.
         </p>
 
         {!isFirebaseConfigured && (
-          <p className="mb-6 text-xs text-amber-400 text-left leading-relaxed">
+          <p className="mb-6 text-xs text-amber-600 text-left leading-relaxed">
             Firebase web config is missing. In Portainer, set FIREBASE_API_KEY,
             FIREBASE_AUTH_DOMAIN, FIREBASE_PROJECT_ID, and FIREBASE_APP_ID on the
             admin-panel service, then recreate the container.
           </p>
         )}
 
-        {error && <p className="mb-6 text-xs text-rose-400 text-left leading-relaxed">{error}</p>}
+        {error && <p className="mb-6 text-xs text-rose-600 text-left leading-relaxed">{error}</p>}
 
         <button
           onClick={onLogin}
           disabled={loading || !isFirebaseConfigured}
-          className="w-full flex items-center justify-center gap-3 px-6 py-3.5 rounded-xl bg-white text-slate-900 font-semibold hover:bg-slate-100 transition shadow-lg disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-3 px-6 py-3.5 rounded-xl bg-white border border-slate-300 text-slate-900 font-semibold hover:bg-slate-50 transition shadow-sm disabled:opacity-50"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path
@@ -61,7 +61,7 @@ export const LoginPage: React.FC = () => {
             />
             <path
               fill="#FBBC05"
-              d="M5.28 14.27a7.22 7.22 0 0 1 0-4.54V6.58H1.25a12.004 12.004 0 0 0 0 10.84l4.03-3.15Z"
+              d="M5.28 14.27a7.22 7.22 0 0 1 0-4.54V6.58H1.25a12.004 12.004 0 0 0 0 10.84l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98Z"
             />
             <path
               fill="#EA4335"
@@ -71,8 +71,8 @@ export const LoginPage: React.FC = () => {
           <span>Sign in with Google</span>
         </button>
 
-        <div className="mt-8 pt-6 border-t border-slate-800 flex items-center justify-center gap-2 text-xs text-slate-500">
-          <ShieldCheck className="w-4 h-4 text-emerald-500" />
+        <div className="mt-8 pt-6 border-t border-slate-200 flex items-center justify-center gap-2 text-xs text-slate-400">
+          <ShieldCheck className="w-4 h-4 text-emerald-600" />
           <span>Protected by Firebase & Backend Email Allowlist</span>
         </div>
       </div>
