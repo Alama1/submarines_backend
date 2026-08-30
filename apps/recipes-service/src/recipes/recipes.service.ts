@@ -8,7 +8,7 @@ import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import { BaseMaterial, PartMaterial, SubmarinePart } from '@ff14/entities';
+import { BaseMaterial, PartMaterial, SubmarinePart, expandAllPartMaterials, ExpandedMaterialRequirement } from '@ff14/entities';
 import { CreatePartDto } from './dto/create-part.dto';
 import { UpdatePartDto } from './dto/update-part.dto';
 
@@ -22,25 +22,40 @@ export class RecipesService {
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
-  findAll(): Promise<SubmarinePart[]> {
-    return this.partRepo.find({
+  async findAll(): Promise<(SubmarinePart & { expandedMaterials?: ExpandedMaterialRequirement[] })[]> {
+    const parts = await this.partRepo.find({
       order: { name: 'ASC' },
       relations: ['materials', 'materials.material'],
     });
+    return this.attachExpanded(parts);
   }
 
-  async findOne(id: string): Promise<SubmarinePart> {
+  async findOne(id: string): Promise<SubmarinePart & { expandedMaterials?: ExpandedMaterialRequirement[] }> {
     const part = await this.partRepo.findOne({
       where: { id },
       relations: ['materials', 'materials.material'],
     });
     if (!part) throw new NotFoundException(`Part "${id}" not found`);
-    return part;
+    const [withExpanded] = await this.attachExpanded([part]);
+    return withExpanded;
+  }
+
+  /** Enriches parts with the fully expanded (nested) raw material requirements. */
+  private async attachExpanded(
+    parts: SubmarinePart[],
+  ): Promise<(SubmarinePart & { expandedMaterials?: ExpandedMaterialRequirement[] })[]> {
+    const expanded = expandAllPartMaterials(parts);
+    return parts.map((p) => ({
+      ...p,
+      expandedMaterials: expanded.get(p.id) ?? [],
+    }));
   }
 
   /**
    * Recalculates desiredQuantity for every BaseMaterial based on:
-   * sum(part.desiredStock * partMaterial.quantity) across all registered submarine parts.
+   * sum(part.desiredStock * partMaterial.quantity) across all registered submarine parts,
+   * with part-as-material references (modified parts) expanded into their full
+   * raw material requirements.
    */
   async recalculateMaterialTargets(): Promise<{
     updatedCount: number;
@@ -50,20 +65,32 @@ export class RecipesService {
     const parts = await this.partRepo.find({
       relations: ['materials', 'materials.material'],
     });
+    const expanded = expandAllPartMaterials(parts);
 
-    // 2. Aggregate required raw materials
+    // 2. Aggregate required materials:
+    //    - part-as-material rows (modified parts needing their base part) are
+    //      counted directly, so the workshop knows how many base parts to keep
+    //      ready — these rows are NOT raw materials and are excluded from the
+    //      expanded chain
+    //    - raw materials are counted once via the fully expanded chain
+    const partNames = new Set(parts.map((p) => p.name.toLowerCase()));
     const materialDesiredMap = new Map<string, number>();
+    const addRequirement = (materialId: string, qty: number) => {
+      materialDesiredMap.set(materialId, (materialDesiredMap.get(materialId) || 0) + qty);
+    };
 
     for (const part of parts) {
       const partTarget = part.desiredStock || 0;
-      if (partTarget > 0 && part.materials) {
-        for (const pm of part.materials) {
-          if (pm.material) {
-            const matId = pm.material.id;
-            const currentTotal = materialDesiredMap.get(matId) || 0;
-            materialDesiredMap.set(matId, currentTotal + partTarget * pm.quantity);
-          }
+      if (partTarget <= 0 || !part.materials) continue;
+
+      for (const pm of part.materials) {
+        if (pm.material && partNames.has(pm.material.name.toLowerCase())) {
+          addRequirement(pm.material.id, partTarget * pm.quantity);
         }
+      }
+
+      for (const req of expanded.get(part.id) ?? []) {
+        addRequirement(req.materialId, partTarget * req.quantity);
       }
     }
 

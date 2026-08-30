@@ -3,7 +3,7 @@ import { EventPattern, Payload, ClientProxy } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { firstValueFrom, timeout } from 'rxjs';
-import { Order, OrderItem, SubmarinePart, PartMaterial } from '@ff14/entities';
+import { Order, OrderItem, SubmarinePart, expandAllPartMaterials } from '@ff14/entities';
 
 export interface OrderProcessingPayload {
   orderId: string;
@@ -60,8 +60,16 @@ export class OrderProcessingConsumer {
 
     try {
       // 2. Build aggregated material requirements
-      // For each item in order, load its SubmarinePart materials and multiply by order quantity
+      // For each item in order, load its SubmarinePart materials and multiply
+      // by order quantity. Part-as-material references (modified parts needing
+      // their non-modified counterpart) are expanded into the full raw
+      // material chain, since those parts are not stock-tracked materials.
       const materialMap = new Map<string, number>(); // materialId -> totalRequired
+
+      const allParts = await this.partRepo.find({
+        relations: ['materials', 'materials.material'],
+      });
+      const expanded = expandAllPartMaterials(allParts);
 
       for (const item of order.items) {
         if (!item.part) {
@@ -69,18 +77,14 @@ export class OrderProcessingConsumer {
           continue;
         }
 
-        const partWithMaterials = await this.partRepo.findOne({
-          where: { id: item.part.id },
-          relations: ['materials', 'materials.material'],
-        });
-
-        if (partWithMaterials?.materials) {
-          for (const pm of partWithMaterials.materials) {
-            if (!pm.material) continue;
-            const matId = pm.material.id;
-            const requiredForThisPart = pm.quantity * item.quantity;
-            const currentTotal = materialMap.get(matId) ?? 0;
-            materialMap.set(matId, currentTotal + requiredForThisPart);
+        const partRequirements = expanded.get(item.part.id);
+        if (partRequirements) {
+          for (const req of partRequirements) {
+            const requiredForThisPart = req.quantity * item.quantity;
+            materialMap.set(
+              req.materialId,
+              (materialMap.get(req.materialId) ?? 0) + requiredForThisPart,
+            );
           }
         }
       }

@@ -8,6 +8,12 @@ export interface PartMaterialInfo {
   material: BaseMaterial;
 }
 
+export interface ExpandedMaterialRequirement {
+  materialId: string;
+  name: string;
+  quantity: number;
+}
+
 export interface SubmarinePart {
   id: string;
   name: string;
@@ -21,6 +27,8 @@ export interface SubmarinePart {
   desiredStock: number;
   updatedAt: string;
   materials?: PartMaterialInfo[];
+  /** Fully expanded raw material requirements (nested parts resolved) */
+  expandedMaterials?: ExpandedMaterialRequirement[];
 }
 
 export interface CreateSubmarinePartDto {

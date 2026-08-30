@@ -400,7 +400,17 @@ export const RecipesPage: React.FC = () => {
                             {part.stock} ready
                           </td>
                           <td className="px-4 py-3 text-slate-400">
-                            {(part.materials ?? []).length} materials
+                            <div>{(part.materials ?? []).length} materials</div>
+                            {(part.expandedMaterials?.length ?? 0) > (part.materials ?? []).length && (
+                              <div
+                                className="text-[11px] text-slate-500"
+                                title={(part.expandedMaterials ?? [])
+                                  .map((m) => `${m.name} x${m.quantity}`)
+                                  .join(', ')}
+                              >
+                                + {(part.expandedMaterials ?? []).length} raw (full chain)
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 py-3 font-mono text-slate-200">
                             {formatGil(part.price)}
@@ -614,6 +624,19 @@ export const RecipesPage: React.FC = () => {
                       <p className="text-[11px] text-slate-500 italic">No materials assigned to this recipe.</p>
                     )}
                   </div>
+
+                  {selectedPart && (selectedPart.expandedMaterials?.length ?? 0) > partMaterials.length && (
+                    <div className="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800">
+                      <p className="text-[11px] text-slate-400 font-semibold mb-1">
+                        Full crafting chain (incl. base part materials):
+                      </p>
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        {(selectedPart.expandedMaterials ?? [])
+                          .map((m) => `${m.name} x${m.quantity}`)
+                          .join(', ')}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-3">
