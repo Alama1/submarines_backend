@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
+import { ClientProxy } from '@nestjs/microservices';
 import { BaseMaterial } from '@ff14/entities';
 import { UpdatePriceDto } from './dto/update-price.dto';
 
@@ -28,7 +29,14 @@ export class PricesService {
     @InjectRepository(BaseMaterial)
     private readonly repo: Repository<BaseMaterial>,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
+    @Inject('PRICE_RMQ_CLIENT') private readonly rmqClient: ClientProxy,
   ) {}
+
+  /** Publishes a manual Universalis price refresh job to the price-worker via RabbitMQ. */
+  triggerRefresh(): { status: string } {
+    this.rmqClient.emit('universalis_price_refresh', { force: true });
+    return { status: 'queued' };
+  }
 
   private mapToPriceItem(mat: BaseMaterial): MaterialPriceItem {
     const effectivePrice = mat.myPrice ?? mat.marketPrice ?? mat.npcPrice ?? 0;

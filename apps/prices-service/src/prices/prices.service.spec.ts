@@ -8,6 +8,7 @@ describe('PricesService', () => {
   let service: PricesService;
   let repo: any;
   let cache: any;
+  let rmqClient: any;
 
   const mockMaterial: Partial<BaseMaterial> = {
     id: 'mat-1',
@@ -37,11 +38,16 @@ describe('PricesService', () => {
       reset: jest.fn().mockResolvedValue(undefined),
     };
 
+    rmqClient = {
+      emit: jest.fn().mockReturnValue({ subscribe: jest.fn() }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PricesService,
         { provide: getRepositoryToken(BaseMaterial), useValue: repo },
         { provide: CACHE_MANAGER, useValue: cache },
+        { provide: 'PRICE_RMQ_CLIENT', useValue: rmqClient },
       ],
     }).compile();
 
@@ -63,6 +69,12 @@ describe('PricesService', () => {
     expect(res.myPrice).toBe(350);
     expect(res.effectivePrice).toBe(350);
     expect(cache.reset).toHaveBeenCalled();
+  });
+
+  it('should publish a refresh job to the price-worker queue', () => {
+    const res = service.triggerRefresh();
+    expect(res.status).toBe('queued');
+    expect(rmqClient.emit).toHaveBeenCalledWith('universalis_price_refresh', { force: true });
   });
 
   it('should clear myPrice and fall back to marketPrice', async () => {

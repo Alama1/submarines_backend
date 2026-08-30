@@ -4,6 +4,7 @@
   Delete,
   Get,
   Param,
+  Post,
   Put,
   Query,
   UseInterceptors,
@@ -28,6 +29,12 @@ export class PricesController {
     const p = Math.max(1, parseInt(page, 10) || 1);
     const l = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
     return this.svc.findAll(search, p, l);
+  }
+
+  /** Manually triggers the Universalis price refresh job (handled by price-worker via RabbitMQ). */
+  @Post('refresh')
+  refresh() {
+    return this.svc.triggerRefresh();
   }
 
   @Get(':id')
