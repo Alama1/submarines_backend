@@ -50,3 +50,44 @@ export interface StockStatusResponse {
   missingCount: number;
 }
 
+/** A person's pledge to deliver a quantity of a missing material */
+export interface MaterialClaim {
+  id: string;
+  materialId: string;
+  claimedFor: string;
+  quantity: number;
+  createdAt: string;
+}
+
+export interface CreateMaterialClaimDto {
+  claimedFor: string;
+  quantity: number;
+}
+
+/** Claims response for a single material */
+export interface MaterialClaimsResponse {
+  material: Pick<BaseMaterial, 'id' | 'name' | 'currentStock' | 'desiredQuantity'>;
+  deficit: number;
+  totalClaimed: number;
+  remaining: number;
+  claims: MaterialClaim[];
+}
+
+/** Item shape returned by GET /inventory/missing (includes claim info) */
+export interface MissingMaterialItem {
+  id: string;
+  name: string;
+  itemId: number | null;
+  currentStock: number;
+  desiredQuantity: number;
+  deficit: number;
+  /** Sum of all claim quantities against this material */
+  claimed: number;
+  /** deficit - claimed (never below 0) */
+  remaining: number;
+  claims: MaterialClaim[];
+  whereToBuy: MaterialSource;
+  category: MaterialCategory;
+  updatedAt: string;
+}
+

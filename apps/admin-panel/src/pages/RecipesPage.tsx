@@ -11,6 +11,7 @@ import {
   X,
   Boxes,
   AlertCircle,
+  Sparkles,
 } from 'lucide-react';
 import {
   SubmarinePart,
@@ -147,6 +148,29 @@ export const RecipesPage: React.FC = () => {
     },
   });
 
+  const resolveIdsMutation = useMutation({
+    // Long timeout: each missing ID requires a XIVAPI round-trip (~120ms apart)
+    mutationFn: () =>
+      api.post('/xivapi/resolve-missing-ids', null, { timeout: 300_000 }),
+    onSuccess: (res) => {
+      const { materials, parts } = res.data;
+      const notFound: string[] = [...materials.notFound, ...parts.notFound];
+      let msg =
+        `Item ID auto-fill complete!\n\n` +
+        `Materials: ${materials.updated} of ${materials.scanned} filled\n` +
+        `Submarine parts: ${parts.updated} of ${parts.scanned} filled`;
+      if (notFound.length > 0) {
+        msg += `\n\nNot found on XIVAPI:\n- ${notFound.join('\n- ')}`;
+      }
+      alert(msg);
+      queryClient.invalidateQueries({ queryKey: ['materials'] });
+      queryClient.invalidateQueries({ queryKey: ['recipes'] });
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.message || 'Failed to auto-fill item IDs.');
+    },
+  });
+
   // ── Helpers ─────────────────────────────────────────────────────────────
   const openNewPart = () => {
     setSelectedPart(null);
@@ -272,28 +296,40 @@ export const RecipesPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl border border-slate-200">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl border border-slate-200">
+            <button
+              onClick={() => setActiveTab('parts')}
+              className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition ${
+                activeTab === 'parts'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <Hammer className="w-3.5 h-3.5" />
+              <span>Submarine Parts ({partsList.length})</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('materials')}
+              className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition ${
+                activeTab === 'materials'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <Boxes className="w-3.5 h-3.5" />
+              <span>Raw Base Materials ({allMaterials.length})</span>
+            </button>
+          </div>
+
           <button
-            onClick={() => setActiveTab('parts')}
-            className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition ${
-              activeTab === 'parts'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-500 hover:text-slate-900'
-            }`}
+            onClick={() => resolveIdsMutation.mutate()}
+            disabled={resolveIdsMutation.isPending}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs border border-slate-300 transition disabled:opacity-50"
+            title="Look up missing FF14 item IDs from XIVAPI (never overwrites existing IDs)"
           >
-            <Hammer className="w-3.5 h-3.5" />
-            <span>Submarine Parts ({partsList.length})</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('materials')}
-            className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition ${
-              activeTab === 'materials'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Boxes className="w-3.5 h-3.5" />
-            <span>Raw Base Materials ({allMaterials.length})</span>
+            <Sparkles className={`w-3.5 h-3.5 text-amber-500 ${resolveIdsMutation.isPending ? 'animate-pulse' : ''}`} />
+            <span>{resolveIdsMutation.isPending ? 'Resolving IDs...' : 'Auto-fill Item IDs'}</span>
           </button>
         </div>
       </div>

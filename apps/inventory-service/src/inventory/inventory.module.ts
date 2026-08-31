@@ -1,14 +1,14 @@
-﻿import { Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { BaseMaterial } from '@ff14/entities';
+import { BaseMaterial, MaterialClaim } from '@ff14/entities';
 import { InventoryController } from './inventory.controller';
 import { InventoryService } from './inventory.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([BaseMaterial]),
+    TypeOrmModule.forFeature([BaseMaterial, MaterialClaim]),
     ClientsModule.registerAsync([
       {
         name: 'INVENTORY_RMQ_CLIENT',

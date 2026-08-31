@@ -1,6 +1,7 @@
 ﻿import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -15,6 +16,7 @@ import { InventoryService } from './inventory.service';
 import { IngestDto } from './dto/ingest.dto';
 import { UpdateStockDto } from './dto/update-stock.dto';
 import { UpdateTargetDto } from './dto/update-target.dto';
+import { CreateClaimDto } from './dto/create-claim.dto';
 
 @Controller('inventory')
 export class InventoryController {
@@ -60,6 +62,28 @@ export class InventoryController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.svc.findOne(id);
+  }
+
+  // ── Claims (person pledges to deliver part of a missing material) ──────
+
+  /** All claims for a material + deficit summary */
+  @Get(':id/claims')
+  findClaims(@Param('id') id: string) {
+    return this.svc.findClaims(id);
+  }
+
+  /** Claim a quantity of the material for a person */
+  @Post(':id/claims')
+  @HttpCode(HttpStatus.CREATED)
+  createClaim(@Param('id') id: string, @Body() dto: CreateClaimDto) {
+    return this.svc.createClaim(id, dto);
+  }
+
+  /** Remove a claim */
+  @Delete('claims/:claimId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteClaim(@Param('claimId') claimId: string): Promise<void> {
+    return this.svc.deleteClaim(claimId);
   }
 
   /** Browser extension ingest payload -> RabbitMQ -> 202 Accepted */

@@ -48,6 +48,16 @@ export class ProxyController {
     return this.forward(this.recipesUrl, req, reply);
   }
 
+  @All('xivapi')
+  proxyXivApiRoot(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    return this.forward(this.recipesUrl, req, reply);
+  }
+
+  @All('xivapi/*')
+  proxyXivApiWildcard(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    return this.forward(this.recipesUrl, req, reply);
+  }
+
   // ── Prices Service (/api/prices) ──────────────────────────────
   @All('prices')
   proxyPricesRoot(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {

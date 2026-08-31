@@ -1,5 +1,6 @@
 export { BaseMaterial } from './base-material.entity';
 export { MaterialSource, MaterialCategory } from './material-enums';
+export { MaterialClaim } from './material-claim.entity';
 export { PartMaterial } from './part-material.entity';
 export { SubmarinePart } from './submarine-part.entity';
 export { Order, OrderStatus } from './order.entity';

@@ -110,6 +110,8 @@ export class AuthGuard implements CanActivate {
       (method === 'GET' && (rawUrl.startsWith('/api/orders/lookup/') || rawUrl.startsWith('/orders/lookup/'))) ||
       // Public in-progress orders feed (for real-time progress page on customer site)
       (method === 'GET' && (rawUrl === '/api/orders/in-progress' || rawUrl === '/orders/in-progress')) ||
+      // Public missing-materials feed with claims (for the "what we need" page on customer site)
+      (method === 'GET' && (rawUrl === '/api/inventory/missing' || rawUrl === '/inventory/missing')) ||
       // Public browsing of parts, materials, prices, discounts
       (method === 'GET' &&
         (rawUrl.startsWith('/api/recipes') ||

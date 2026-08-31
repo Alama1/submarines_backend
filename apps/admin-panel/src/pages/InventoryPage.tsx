@@ -10,7 +10,13 @@ import {
   ChevronDown,
   ChevronUp,
   Layers,
+  UserPlus,
+  Users,
+  X,
+  Plus,
+  Trash2,
 } from 'lucide-react';
+import { MaterialClaimsResponse } from '@ff14/types';
 import { SubmarinePart } from '@ff14/types';
 
 /**
@@ -57,11 +63,190 @@ const BlurInput: React.FC<{
 const inlineInputClass =
   'w-20 px-2 py-1 bg-white border border-slate-300 rounded text-xs text-slate-900 font-mono focus:outline-none focus:border-emerald-500';
 
+interface ClaimsModalProps {
+  materialId: string;
+  materialName: string;
+  onClose: () => void;
+}
+
+/** Manage who claimed which portion of a missing material */
+const ClaimsModal: React.FC<ClaimsModalProps> = ({ materialId, materialName, onClose }) => {
+  const queryClient = useQueryClient();
+  const [person, setPerson] = useState('');
+  const [quantity, setQuantity] = useState<number | ''>('');
+
+  const { data, isLoading } = useQuery<MaterialClaimsResponse>({
+    queryKey: ['claims', materialId],
+    queryFn: async () => (await api.get(`/inventory/${materialId}/claims`)).data,
+  });
+
+  const createClaimMutation = useMutation({
+    mutationFn: (payload: { claimedFor: string; quantity: number }) =>
+      api.post(`/inventory/${materialId}/claims`, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['claims', materialId] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      setPerson('');
+      setQuantity('');
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.message || 'Failed to add claim.');
+    },
+  });
+
+  const deleteClaimMutation = useMutation({
+    mutationFn: (claimId: string) => api.delete(`/inventory/claims/${claimId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['claims', materialId] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.message || 'Failed to remove claim.');
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!person.trim() || quantity === '' || Number(quantity) < 1) return;
+    createClaimMutation.mutate({ claimedFor: person.trim(), quantity: Number(quantity) });
+  };
+
+  const deficit = data?.deficit ?? 0;
+  const remaining = data?.remaining ?? 0;
+  const fullyCovered = deficit > 0 && remaining === 0;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white border border-slate-200 rounded-xl max-w-lg w-full shadow-2xl relative">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        <div className="p-6 border-b border-slate-200">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-cyan-50 border border-cyan-200 flex items-center justify-center text-cyan-600">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-slate-900">{materialName}</h3>
+              <p className="text-xs text-slate-500">Claims — who is delivering what</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-4 gap-2 mt-4 text-center">
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-2">
+              <div className="text-[10px] uppercase tracking-wide text-slate-400">Needed</div>
+              <div className="text-sm font-bold text-slate-900 font-mono">
+                {formatNumber(data?.deficit ?? 0)}
+              </div>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-2">
+              <div className="text-[10px] uppercase tracking-wide text-slate-400">Claimed</div>
+              <div className="text-sm font-bold text-cyan-600 font-mono">
+                {formatNumber(data?.totalClaimed ?? 0)}
+              </div>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-2">
+              <div className="text-[10px] uppercase tracking-wide text-slate-400">Remaining</div>
+              <div className={`text-sm font-bold font-mono ${fullyCovered ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {formatNumber(remaining)}
+              </div>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-2">
+              <div className="text-[10px] uppercase tracking-wide text-slate-400">Target</div>
+              <div className="text-sm font-bold text-slate-900 font-mono">
+                {formatNumber(data?.material.desiredQuantity ?? 0)}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {/* Existing claims */}
+          <div className="space-y-2 max-h-52 overflow-y-auto">
+            {isLoading ? (
+              <div className="text-center py-6 text-xs text-slate-400">Loading claims...</div>
+            ) : (data?.claims.length ?? 0) === 0 ? (
+              <div className="text-center py-6 text-xs text-slate-400">
+                No claims yet. Add the first person below.
+              </div>
+            ) : (
+              data!.claims.map((claim) => (
+                <div
+                  key={claim.id}
+                  className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"
+                >
+                  <div>
+                    <span className="text-xs font-semibold text-slate-800">{claim.claimedFor}</span>
+                    <span className="text-[11px] text-slate-400 ml-2">
+                      {new Date(claim.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-bold text-cyan-600 bg-white border border-slate-200 rounded px-2 py-0.5">
+                      {formatNumber(claim.quantity)}
+                    </span>
+                    <button
+                      onClick={() => deleteClaimMutation.mutate(claim.id)}
+                      disabled={deleteClaimMutation.isPending}
+                      className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition disabled:opacity-50"
+                      title="Remove claim"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Add claim form */}
+          <form onSubmit={handleSubmit} className="pt-3 border-t border-slate-200 space-y-3">
+            <label className="block text-xs font-semibold text-slate-700">Add a claim</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Person name"
+                value={person}
+                onChange={(e) => setPerson(e.target.value)}
+                className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500"
+              />
+              <input
+                type="number"
+                min={1}
+                placeholder="Qty"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value === '' ? '' : parseInt(e.target.value))}
+                className="w-24 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 font-mono placeholder:text-slate-400 focus:outline-none focus:border-emerald-500"
+              />
+              <button
+                type="submit"
+                disabled={createClaimMutation.isPending || !person.trim() || quantity === '' || Number(quantity) < 1}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition disabled:opacity-50"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{createClaimMutation.isPending ? 'Adding...' : 'Claim'}</span>
+              </button>
+            </div>
+            <p className="text-[10px] text-slate-400">
+              Claims are displayed on the public website next to what the workshop needs.
+            </p>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const InventoryPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [onlyMissing, setOnlyMissing] = useState(false);
   const [showPlanner, setShowPlanner] = useState(true);
+  const [claimsModal, setClaimsModal] = useState<{ id: string; name: string } | null>(null);
 
   // Materials query
   const { data, isLoading } = useQuery<{ items: any[]; total: number }>({
@@ -272,18 +457,19 @@ export const InventoryPage: React.FC = () => {
                 </th>
                 <th className="px-5 py-3">Deficit / Surplus</th>
                 <th className="px-5 py-3">Source</th>
+                <th className="px-5 py-3 text-right">Claims</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-slate-400">
+                  <td colSpan={7} className="px-5 py-8 text-center text-slate-400">
                     Loading inventory...
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-slate-400">
+                  <td colSpan={7} className="px-5 py-8 text-center text-slate-400">
                     No materials found.
                   </td>
                 </tr>
@@ -345,6 +531,19 @@ export const InventoryPage: React.FC = () => {
                         <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${sourceBadgeClass(mat.whereToBuy)}`}>
                           {mat.whereToBuy}
                         </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-right">
+                        <button
+                          onClick={() => setClaimsModal({ id: mat.id, name: mat.name })}
+                          className={`p-1.5 rounded-lg border transition ${
+                            hasDeficit
+                              ? 'bg-cyan-50 border-cyan-200 text-cyan-600 hover:bg-cyan-100'
+                              : 'bg-white border-slate-300 text-slate-400 hover:bg-slate-50'
+                          }`}
+                          title="Manage Claims"
+                        >
+                          <UserPlus className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   );
@@ -441,6 +640,15 @@ export const InventoryPage: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* ── Claims modal ── */}
+      {claimsModal && (
+        <ClaimsModal
+          materialId={claimsModal.id}
+          materialName={claimsModal.name}
+          onClose={() => setClaimsModal(null)}
+        />
+      )}
     </div>
   );
 };

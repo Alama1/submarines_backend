@@ -8,6 +8,7 @@ import { BaseMaterial, PartMaterial, SubmarinePart } from '@ff14/entities';
 import { HealthController } from './health/health.controller';
 import { MaterialsModule } from './materials/materials.module';
 import { RecipesModule } from './recipes/recipes.module';
+import { ItemIdsModule } from './item-ids/item-ids.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { RecipesModule } from './recipes/recipes.module';
 
     MaterialsModule,
     RecipesModule,
+    ItemIdsModule,
   ],
   controllers: [HealthController],
 })
