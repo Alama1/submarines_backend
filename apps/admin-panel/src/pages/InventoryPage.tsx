@@ -241,12 +241,35 @@ const ClaimsModal: React.FC<ClaimsModalProps> = ({ materialId, materialName, onC
   );
 };
 
+const PLANNER_STORAGE_KEY = 'inventory.showPlanner';
+
+const readPlannerVisibility = (): boolean => {
+  try {
+    const stored = localStorage.getItem(PLANNER_STORAGE_KEY);
+    return stored === null ? true : stored === 'true';
+  } catch {
+    return true;
+  }
+};
+
 export const InventoryPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [onlyMissing, setOnlyMissing] = useState(false);
-  const [showPlanner, setShowPlanner] = useState(true);
+  const [showPlanner, setShowPlanner] = useState<boolean>(readPlannerVisibility);
   const [claimsModal, setClaimsModal] = useState<{ id: string; name: string } | null>(null);
+
+  const togglePlanner = () => {
+    setShowPlanner((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(PLANNER_STORAGE_KEY, String(next));
+      } catch {
+        // storage unavailable — state still toggles for this session
+      }
+      return next;
+    });
+  };
 
   // Materials query
   const { data, isLoading } = useQuery<{ items: any[]; total: number }>({
@@ -260,8 +283,13 @@ export const InventoryPage: React.FC = () => {
 
   // Repair/utility supplies (tracked separately, e.g. Magitek Repair Materials)
   const { data: repairData, isLoading: repairLoading } = useQuery<{ items: any[]; total: number }>({
-    queryKey: ['inventory-repair'],
-    queryFn: async () => (await api.get('/inventory/repair?limit=100')).data,
+    queryKey: ['inventory-repair', search],
+    queryFn: async () => {
+      const url = search
+        ? `/inventory/repair?search=${encodeURIComponent(search)}&limit=100`
+        : '/inventory/repair?limit=100';
+      return (await api.get(url)).data;
+    },
   });
 
   // Submarine parts for the Fleet Target Planner
@@ -384,7 +412,7 @@ export const InventoryPage: React.FC = () => {
               <span>{recalculateTargetsMutation.isPending ? 'Recalculating...' : 'Sync Material Targets'}</span>
             </button>
             <button
-              onClick={() => setShowPlanner(!showPlanner)}
+              onClick={togglePlanner}
               className="p-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-500 transition"
               title="Toggle Planner"
             >

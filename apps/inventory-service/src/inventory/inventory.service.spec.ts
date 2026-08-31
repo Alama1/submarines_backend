@@ -85,7 +85,7 @@ describe('InventoryService — claims', () => {
         claim('c2', 2000, 'Bob'),
       ]);
 
-      const result = await svc.findMissing(1, 50);
+      const result = await svc.findMissing(undefined, 1, 50);
 
       expect(result.total).toBe(1);
       expect(result.items[0]).toMatchObject({
@@ -109,10 +109,29 @@ describe('InventoryService — claims', () => {
       matRepo.createQueryBuilder.mockReturnValue(qb);
       claimRepo.find.mockResolvedValue([claim('c1', 12000, 'Alice')]);
 
-      const result = await svc.findMissing(1, 50);
+      const result = await svc.findMissing(undefined, 1, 50);
 
       expect(result.items[0].claimed).toBe(12000);
       expect(result.items[0].remaining).toBe(0);
+    });
+
+    it('applies the search filter to the missing-materials query', async () => {
+      const qb = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+      };
+      matRepo.createQueryBuilder.mockReturnValue(qb);
+      claimRepo.find.mockResolvedValue([]);
+
+      await svc.findMissing('cobalt', 1, 50);
+
+      expect(qb.andWhere).toHaveBeenCalledWith('LOWER(m.name) LIKE :search', {
+        search: '%cobalt%',
+      });
     });
   });
 

@@ -116,13 +116,20 @@ export class InventoryService {
   }
 
   async findMissing(
+    search?: string,
     page = 1,
     limit = 50,
   ): Promise<{ items: MissingMaterialItem[]; total: number }> {
-    const [materials, total] = await this.repo
+    const qb = this.repo
       .createQueryBuilder('m')
       .where('m.current_stock < m.desired_quantity')
-      .andWhere('m.category != :repair', { repair: MaterialCategory.REPAIR })
+      .andWhere('m.category != :repair', { repair: MaterialCategory.REPAIR });
+    if (search) {
+      qb.andWhere('LOWER(m.name) LIKE :search', {
+        search: `%${search.toLowerCase()}%`,
+      });
+    }
+    const [materials, total] = await qb
       .orderBy('(m.desired_quantity - m.current_stock)', 'DESC')
       .skip((page - 1) * limit)
       .take(limit)
