@@ -13,6 +13,7 @@ import {
   MaterialCategory,
   MaterialClaim,
   MaterialSource,
+  SubmarinePart,
 } from '@ff14/entities';
 import { IngestDto } from './dto/ingest.dto';
 import { UpdateStockDto } from './dto/update-stock.dto';
@@ -122,8 +123,13 @@ export class InventoryService {
   ): Promise<{ items: MissingMaterialItem[]; total: number }> {
     const qb = this.repo
       .createQueryBuilder('m')
+      // Exclude "part-as-material" rows: submarine parts that also exist in
+      // base_materials. Clients can't craft or deliver parts — the missing
+      // list is for raw materials only
+      .leftJoin(SubmarinePart, 'p', 'LOWER(p.name) = LOWER(m.name)')
       .where('m.current_stock < m.desired_quantity')
-      .andWhere('m.category != :repair', { repair: MaterialCategory.REPAIR });
+      .andWhere('m.category != :repair', { repair: MaterialCategory.REPAIR })
+      .andWhere('p.id IS NULL');
     if (search) {
       qb.andWhere('LOWER(m.name) LIKE :search', {
         search: `%${search.toLowerCase()}%`,

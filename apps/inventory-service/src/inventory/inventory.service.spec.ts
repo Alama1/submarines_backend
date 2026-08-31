@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { BaseMaterial, MaterialClaim } from '@ff14/entities';
+import { BaseMaterial, MaterialClaim, SubmarinePart } from '@ff14/entities';
 import { InventoryService } from './inventory.service';
 
 describe('InventoryService — claims', () => {
@@ -70,15 +70,18 @@ describe('InventoryService — claims', () => {
   });
 
   describe('findMissing', () => {
+    const makeQb = (result: [unknown[], number]) => ({
+      leftJoin: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue(result),
+    });
+
     it('aggregates claimed amounts and computes the unclaimed remainder', async () => {
-      const qb = {
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        orderBy: jest.fn().mockReturnThis(),
-        skip: jest.fn().mockReturnThis(),
-        take: jest.fn().mockReturnThis(),
-        getManyAndCount: jest.fn().mockResolvedValue([[material], 1]),
-      };
+      const qb = makeQb([[material], 1]);
       matRepo.createQueryBuilder.mockReturnValue(qb);
       claimRepo.find.mockResolvedValue([
         claim('c1', 3000, 'Alice'),
@@ -98,14 +101,7 @@ describe('InventoryService — claims', () => {
     });
 
     it('never reports a negative remainder when claims exceed the deficit', async () => {
-      const qb = {
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        orderBy: jest.fn().mockReturnThis(),
-        skip: jest.fn().mockReturnThis(),
-        take: jest.fn().mockReturnThis(),
-        getManyAndCount: jest.fn().mockResolvedValue([[material], 1]),
-      };
+      const qb = makeQb([[material], 1]);
       matRepo.createQueryBuilder.mockReturnValue(qb);
       claimRepo.find.mockResolvedValue([claim('c1', 12000, 'Alice')]);
 
@@ -116,14 +112,7 @@ describe('InventoryService — claims', () => {
     });
 
     it('applies the search filter to the missing-materials query', async () => {
-      const qb = {
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        orderBy: jest.fn().mockReturnThis(),
-        skip: jest.fn().mockReturnThis(),
-        take: jest.fn().mockReturnThis(),
-        getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
-      };
+      const qb = makeQb([[], 0]);
       matRepo.createQueryBuilder.mockReturnValue(qb);
       claimRepo.find.mockResolvedValue([]);
 
@@ -132,6 +121,21 @@ describe('InventoryService — claims', () => {
       expect(qb.andWhere).toHaveBeenCalledWith('LOWER(m.name) LIKE :search', {
         search: '%cobalt%',
       });
+    });
+
+    it('excludes submarine part rows from the missing-materials list', async () => {
+      const qb = makeQb([[], 0]);
+      matRepo.createQueryBuilder.mockReturnValue(qb);
+      claimRepo.find.mockResolvedValue([]);
+
+      await svc.findMissing(undefined, 1, 50);
+
+      expect(qb.leftJoin).toHaveBeenCalledWith(
+        SubmarinePart,
+        'p',
+        'LOWER(p.name) = LOWER(m.name)',
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith('p.id IS NULL');
     });
   });
 
