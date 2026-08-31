@@ -67,36 +67,31 @@ export class ProxyController {
     if (segment.endsWith('-json')) {
       return this.forwardDocs(req, reply, segment, '/docs-json');
     }
-    // Swagger UI page: redirect to the trailing-slash form so the page's
-    // relative asset paths (./docs/...) resolve under the service subtree
+    // Swagger UI page: redirect to index.html under the service subtree so
+    // the page's relative asset paths (./docs/...) resolve per service.
+    // (A trailing-slash route can't be used — Nest strips trailing slashes
+    // when registering, which collides with this route in Fastify.)
     if (req.method === 'GET' || req.method === 'HEAD') {
       reply.status(301);
-      reply.header('location', `/api/docs/${segment}/`);
+      reply.header('location', `/api/docs/${segment}/index.html`);
       return;
     }
     reply.status(404);
     return { statusCode: 404, message: 'Not found' };
   }
 
-  /** /api/docs/<svc>/ — the Swagger UI page itself */
-  @All('docs/:segment/')
-  proxyDocsPage(
-    @Req() req: ProxyIncomingRequest,
-    @Res({ passthrough: true }) reply: FastifyReply,
-    @Param('segment') segment: string,
-  ) {
-    return this.forwardDocs(req, reply, segment, '/docs');
-  }
-
-  /** /api/docs/<svc>/docs/* — swagger static assets + init script */
-  @All('docs/:segment/docs/*')
+  /** /api/docs/<svc>/* — the UI page via index.html + swagger static assets */
+  @All('docs/:segment/*')
   proxyDocsAssets(
     @Req() req: ProxyIncomingRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
     @Param('segment') segment: string,
   ) {
     const raw = req.raw?.url || req.url || '';
-    const suffix = raw.slice(`/api/docs/${segment}`.length); // e.g. "/docs/swagger-ui.css"
+    const suffix = raw.slice(`/api/docs/${segment}`.length); // "/index.html" | "/docs/..."
+    if (suffix === '/index.html' || suffix === '/') {
+      return this.forwardDocs(req, reply, segment, '/docs');
+    }
     return this.forwardDocs(req, reply, segment, suffix || '/docs');
   }
 
