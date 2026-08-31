@@ -112,6 +112,8 @@ export class AuthGuard implements CanActivate {
       (method === 'GET' && (rawUrl === '/api/orders/in-progress' || rawUrl === '/orders/in-progress')) ||
       // Public missing-materials feed with claims (for the "what we need" page on customer site)
       (method === 'GET' && (rawUrl === '/api/inventory/missing' || rawUrl === '/inventory/missing')) ||
+      // Public Swagger docs for the downstream services (used by the client FE developer)
+      (method === 'GET' && (rawUrl.startsWith('/api/docs') || rawUrl.startsWith('/docs'))) ||
       // Public browsing of parts, materials, prices, discounts
       (method === 'GET' &&
         (rawUrl.startsWith('/api/recipes') ||
