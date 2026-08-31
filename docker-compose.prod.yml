@@ -145,14 +145,5 @@ services:
       rabbitmq: { condition: service_healthy }
     restart: unless-stopped
 
-  order-worker:
-    image: ghcr.io/${IMAGE_PREFIX:-user/submarines}-order-worker:latest
-    environment:
-      <<: *app-env
-    depends_on:
-      postgres: { condition: service_healthy }
-      rabbitmq: { condition: service_healthy }
-    restart: unless-stopped
-
 volumes:
   postgres_data:

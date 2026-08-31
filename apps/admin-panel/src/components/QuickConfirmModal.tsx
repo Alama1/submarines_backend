@@ -99,7 +99,7 @@ export const QuickConfirmModal: React.FC<QuickConfirmModalProps> = ({ onClose })
               disabled={loading || !code.trim()}
               className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium disabled:opacity-50 flex items-center gap-2"
             >
-              {loading ? 'Confirming...' : 'Confirm & Reserve Stock'}
+              {loading ? 'Confirming...' : 'Confirm Order'}
             </button>
           </div>
         </form>

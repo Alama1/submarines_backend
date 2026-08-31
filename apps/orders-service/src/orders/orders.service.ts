@@ -1,12 +1,10 @@
 import {
   BadRequestException,
-  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
-import { ClientProxy } from '@nestjs/microservices';
 import * as crypto from 'crypto';
 import {
   BulkDiscount,
@@ -30,8 +28,6 @@ export class OrdersService {
     private readonly discountRepo: Repository<BulkDiscount>,
     @InjectDataSource()
     private readonly ds: DataSource,
-    @Inject('ORDER_RMQ_CLIENT')
-    private readonly rmqClient: ClientProxy,
   ) {}
 
   /** Generates a human-friendly unique order code, e.g. SUB-7K9P */
@@ -60,10 +56,13 @@ export class OrdersService {
     const qb = this.orderRepo
       .createQueryBuilder('o')
       .leftJoinAndSelect('o.items', 'items')
-      .leftJoinAndSelect('items.part', 'part');
+      .leftJoinAndSelect('items.part', 'part')
+      // Unconfirmed (pending) orders are hidden everywhere — spam protection.
+      // They only become visible once activated with their confirmation code.
+      .where('o.status != :hidden', { hidden: 'pending' });
 
     if (status) {
-      qb.where('o.status = :status', { status });
+      qb.andWhere('o.status = :status', { status });
     }
 
     const [items, total] = await qb
@@ -244,7 +243,8 @@ export class OrdersService {
 
   /**
    * Admin confirms & activates the order by providing the client's confirmation code.
-   * This triggers inventory reservation and order processing.
+   * Orders never touch inventory — this only stamps the confirmation and moves
+   * the order to in_progress; admins manage further status changes manually.
    */
   async confirmByCode(code: string): Promise<Order> {
     const order = await this.findByCode(code);
@@ -263,10 +263,8 @@ export class OrdersService {
     }
 
     order.confirmedAt = new Date();
+    order.status = 'confirmed';
     await this.orderRepo.save(order);
-
-    // Emit event to RabbitMQ for order-worker to reserve inventory and fulfill
-    this.rmqClient.emit('order_processing', { orderId: order.id });
 
     return order;
   }
@@ -288,8 +286,8 @@ export class OrdersService {
 
   async cancel(id: string): Promise<Order> {
     const order = await this.findOne(id);
-    if (order.status !== 'pending') {
-      throw new BadRequestException(`Cannot cancel order in "${order.status}" status (only pending orders can be cancelled)`);
+    if (order.status !== 'pending' && order.status !== 'confirmed') {
+      throw new BadRequestException(`Cannot cancel order in "${order.status}" status (only pending or confirmed orders can be cancelled)`);
     }
     order.status = 'cancelled';
     await this.orderRepo.save(order);

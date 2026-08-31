@@ -34,8 +34,6 @@ jobs:
             dockerfile: ./apps/price-worker/Dockerfile
           - name: inventory-worker
             dockerfile: ./apps/inventory-worker/Dockerfile
-          - name: order-worker
-            dockerfile: ./apps/order-worker/Dockerfile
           - name: admin-panel
             dockerfile: ./apps/admin-panel/Dockerfile
 

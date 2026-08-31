@@ -3,17 +3,20 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { StatusBadge } from '../components/StatusBadge';
 import { formatGil } from '../lib/utils';
-import {
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Search,
-  Filter,
-  Eye,
-  X,
-  Play,
-} from 'lucide-react';
+import { Eye, X, XCircle } from 'lucide-react';
 import { Order, OrderStatus } from '@ff14/types';
+
+const STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'finished', label: 'Finished' },
+  { value: 'fulfilled', label: 'Fulfilled' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
+
+const statusSelectClass =
+  'rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:border-emerald-500 disabled:opacity-50';
 
 export const OrdersPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -28,22 +31,12 @@ export const OrdersPage: React.FC = () => {
     },
   });
 
-  const confirmMutation = useMutation({
-    mutationFn: (id: string) => api.patch(`/orders/${id}/confirm`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
-      queryClient.invalidateQueries({ queryKey: ['in-progress-orders'] });
-      if (selectedOrder) setSelectedOrder(null);
-    },
-  });
-
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: OrderStatus }) =>
       api.patch(`/orders/${id}/status`, { status }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       queryClient.invalidateQueries({ queryKey: ['in-progress-orders'] });
-      if (selectedOrder) setSelectedOrder(null);
     },
   });
 
@@ -57,6 +50,11 @@ export const OrdersPage: React.FC = () => {
 
   const orders = data?.items ?? [];
 
+  // Fresh copy of the selected order so the modal reflects status changes immediately
+  const modalOrder = selectedOrder
+    ? orders.find((o) => o.id === selectedOrder.id) ?? selectedOrder
+    : null;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -68,9 +66,9 @@ export const OrdersPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Filter Tabs */}
+      {/* Filter Tabs — pending orders are hidden until activated by code */}
       <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
-        {['all', 'pending', 'in_progress', 'fulfilled', 'cancelled'].map((tab) => (
+        {['all', 'confirmed', 'in_progress', 'finished', 'fulfilled', 'cancelled'].map((tab) => (
           <button
             key={tab}
             onClick={() => setStatusFilter(tab)}
@@ -137,7 +135,7 @@ export const OrdersPage: React.FC = () => {
                     <td className="px-5 py-3.5 text-slate-500">
                       {new Date(order.createdAt).toLocaleDateString()}
                     </td>
-                    <td className="px-5 py-3.5 text-right space-x-2">
+                    <td className="px-5 py-3.5 text-right space-x-2 whitespace-nowrap">
                       <button
                         onClick={() => setSelectedOrder(order)}
                         className="p-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-500 transition"
@@ -146,35 +144,30 @@ export const OrdersPage: React.FC = () => {
                         <Eye className="w-4 h-4" />
                       </button>
 
-                      {order.status === 'pending' && (
-                        <>
-                          <button
-                            onClick={() => confirmMutation.mutate(order.id)}
-                            disabled={confirmMutation.isPending}
-                            className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition"
-                            title="Confirm & Process"
-                          >
-                            Confirm
-                          </button>
-                          <button
-                            onClick={() => cancelMutation.mutate(order.id)}
-                            disabled={cancelMutation.isPending}
-                            className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition"
-                            title="Cancel Order"
-                          >
-                            <XCircle className="w-4 h-4" />
-                          </button>
-                        </>
-                      )}
+                      <select
+                        value={order.status}
+                        disabled={statusMutation.isPending}
+                        onChange={(e) =>
+                          statusMutation.mutate({ id: order.id, status: e.target.value as OrderStatus })
+                        }
+                        className={statusSelectClass}
+                        title="Set Status"
+                      >
+                        {STATUS_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
 
-                      {order.status === 'in_progress' && (
+                      {(order.status === 'pending' || order.status === 'confirmed') && (
                         <button
-                          onClick={() =>
-                            statusMutation.mutate({ id: order.id, status: 'fulfilled' })
-                          }
-                          className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition"
+                          onClick={() => cancelMutation.mutate(order.id)}
+                          disabled={cancelMutation.isPending}
+                          className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition"
+                          title="Cancel Order"
                         >
-                          Mark Fulfilled
+                          <XCircle className="w-4 h-4" />
                         </button>
                       )}
                     </td>
@@ -186,8 +179,8 @@ export const OrdersPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Order Detail Modal */}
-      {selectedOrder && (
+      {/* Order Detail Modal — uses the live row from the list so status updates in place */}
+      {modalOrder && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 rounded-xl max-w-2xl w-full p-6 shadow-2xl relative space-y-6">
             <button
@@ -200,18 +193,18 @@ export const OrdersPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <span className="font-mono text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                  {selectedOrder.orderCode}
+                  {modalOrder.orderCode}
                 </span>
                 <h3 className="font-bold text-slate-900 text-lg mt-1">
-                  {selectedOrder.clientName}
+                  {modalOrder.clientName}
                 </h3>
               </div>
-              <StatusBadge status={selectedOrder.status} />
+              <StatusBadge status={modalOrder.status} />
             </div>
 
-            {selectedOrder.contactInfo && (
+            {modalOrder.contactInfo && (
               <p className="text-xs text-slate-500">
-                Contact: <strong className="text-slate-700">{selectedOrder.contactInfo}</strong>
+                Contact: <strong className="text-slate-700">{modalOrder.contactInfo}</strong>
               </p>
             )}
 
@@ -221,7 +214,7 @@ export const OrdersPage: React.FC = () => {
                 Order Items & Snapshot Pricing
               </h4>
               <div className="bg-slate-50 rounded-lg border border-slate-200 divide-y divide-slate-200">
-                {(selectedOrder.items ?? []).map((item, idx) => (
+                {(modalOrder.items ?? []).map((item, idx) => (
                   <div
                     key={idx}
                     className="p-3 flex items-center justify-between text-xs"
@@ -249,50 +242,37 @@ export const OrdersPage: React.FC = () => {
             <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-xs space-y-1.5">
               <div className="flex justify-between text-slate-500">
                 <span>Subtotal:</span>
-                <span className="font-mono">{formatGil(selectedOrder.subtotal)}</span>
+                <span className="font-mono">{formatGil(modalOrder.subtotal)}</span>
               </div>
-              {selectedOrder.discountPct > 0 && (
+              {modalOrder.discountPct > 0 && (
                 <div className="flex justify-between text-emerald-600">
-                  <span>Bulk Discount ({selectedOrder.discountPct}%):</span>
-                  <span className="font-mono">-{formatGil(selectedOrder.discountAmt)}</span>
+                  <span>Bulk Discount ({modalOrder.discountPct}%):</span>
+                  <span className="font-mono">-{formatGil(modalOrder.discountAmt)}</span>
                 </div>
               )}
               <div className="flex justify-between text-sm font-bold text-slate-900 border-t border-slate-200 pt-2">
                 <span>Total Due:</span>
-                <span className="font-mono text-emerald-600">{formatGil(selectedOrder.total)}</span>
+                <span className="font-mono text-emerald-600">{formatGil(modalOrder.total)}</span>
               </div>
             </div>
 
-            {/* Actions in drawer */}
-            <div className="flex justify-end gap-2 pt-2">
-              {selectedOrder.status === 'pending' && (
-                <button
-                  onClick={() => confirmMutation.mutate(selectedOrder.id)}
-                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold"
-                >
-                  Confirm & Reserve Stock
-                </button>
-              )}
-              {selectedOrder.status !== 'in_progress' && selectedOrder.status !== 'fulfilled' && (
-                <button
-                  onClick={() =>
-                    statusMutation.mutate({ id: selectedOrder.id, status: 'in_progress' })
-                  }
-                  className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold"
-                >
-                  Set In Progress
-                </button>
-              )}
-              {selectedOrder.status === 'in_progress' && (
-                <button
-                  onClick={() =>
-                    statusMutation.mutate({ id: selectedOrder.id, status: 'fulfilled' })
-                  }
-                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold"
-                >
-                  Mark Fulfilled
-                </button>
-              )}
+            {/* Status control */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+              <span className="text-xs font-medium text-slate-500">Set Status:</span>
+              <select
+                value={modalOrder.status}
+                disabled={statusMutation.isPending}
+                onChange={(e) =>
+                  statusMutation.mutate({ id: modalOrder.id, status: e.target.value as OrderStatus })
+                }
+                className={`${statusSelectClass} px-3 py-2`}
+              >
+                {STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>

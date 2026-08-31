@@ -177,19 +177,6 @@ services:
       rabbitmq: { condition: service_healthy }
     restart: unless-stopped
 
-  order-worker:
-    build: { context: ., dockerfile: ./apps/order-worker/Dockerfile }
-    environment:
-      POSTGRES_HOST: postgres
-      RABBITMQ_URL: amqp://ff14:ff14local@rabbitmq:5672
-    env_file:
-      - path: ./apps/order-worker/.env.local
-        required: false
-    depends_on:
-      postgres: { condition: service_healthy }
-      rabbitmq: { condition: service_healthy }
-    restart: unless-stopped
-
 volumes:
   postgres_data:
   redis_data:

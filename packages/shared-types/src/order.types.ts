@@ -1,6 +1,6 @@
 import { SubmarinePart } from './submarine.types';
 
-export type OrderStatus = 'pending' | 'in_progress' | 'processing' | 'fulfilled' | 'cancelled';
+export type OrderStatus = 'pending' | 'confirmed' | 'in_progress' | 'finished' | 'fulfilled' | 'cancelled';
 
 export interface OrderItem {
   id?: number;

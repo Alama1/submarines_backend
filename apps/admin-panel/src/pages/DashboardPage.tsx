@@ -23,10 +23,10 @@ export const DashboardPage: React.FC = () => {
     refetchInterval: 10000,
   });
 
-  // Fetch orders summary
-  const { data: pendingOrders } = useQuery({
-    queryKey: ['orders', 'pending'],
-    queryFn: async () => (await api.get('/orders?status=pending&limit=5')).data,
+  // Fetch confirmed orders summary (pending orders stay hidden until activated by code)
+  const { data: confirmedOrders } = useQuery({
+    queryKey: ['orders', 'confirmed'],
+    queryFn: async () => (await api.get('/orders?status=confirmed&limit=5')).data,
   });
 
   // Fetch missing materials count
@@ -61,15 +61,15 @@ export const DashboardPage: React.FC = () => {
 
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-medium text-slate-500">Pending Orders</span>
-            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+            <span className="text-xs font-medium text-slate-500">Confirmed Orders</span>
+            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
               <Clock className="w-4 h-4" />
             </div>
           </div>
           <div className="text-2xl font-bold text-slate-900">
-            {pendingOrders?.total ?? 0}
+            {confirmedOrders?.total ?? 0}
           </div>
-          <p className="text-xs text-amber-600 mt-1">Awaiting confirmation</p>
+          <p className="text-xs text-blue-600 mt-1">Ready to start crafting</p>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
@@ -123,7 +123,7 @@ export const DashboardPage: React.FC = () => {
             <ShoppingCart className="w-8 h-8 mx-auto text-slate-300" />
             <p className="text-sm">No orders currently marked as in-progress.</p>
             <p className="text-xs text-slate-400">
-              Confirm pending orders or change order status to "in_progress" in the Orders tab.
+              Confirm orders with their code (top bar) or set status to "In Progress" in the Orders tab.
             </p>
           </div>
         ) : (
