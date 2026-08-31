@@ -9,7 +9,7 @@ import { Repository } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { ClientProxy } from '@nestjs/microservices';
-import { AppSetting, BaseMaterial } from '@ff14/entities';
+import { AppSetting, BaseMaterial, SubmarinePart } from '@ff14/entities';
 import { UNIVERSALIS_WORLD_KEY, UniversalisSettings } from '@ff14/types';
 import { UpdatePriceDto } from './dto/update-price.dto';
 import { UpdateWorldDto } from './dto/update-world.dto';
@@ -31,6 +31,8 @@ export class PricesService {
   constructor(
     @InjectRepository(BaseMaterial)
     private readonly repo: Repository<BaseMaterial>,
+    @InjectRepository(SubmarinePart)
+    private readonly partRepo: Repository<SubmarinePart>,
     @InjectRepository(AppSetting)
     private readonly settingRepo: Repository<AppSetting>,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
@@ -104,9 +106,15 @@ export class PricesService {
     page = 1,
     limit = 50,
   ): Promise<{ items: MaterialPriceItem[]; total: number }> {
-    const qb = this.repo.createQueryBuilder('m');
+    const qb = this.repo
+      .createQueryBuilder('m')
+      // Exclude "part-as-material" rows: submarine parts that also exist in
+      // base_materials (so recipes can reference them) must not appear in
+      // the market pricing list — they are crafted in-house, not market items
+      .leftJoin(SubmarinePart, 'p', 'LOWER(p.name) = LOWER(m.name)')
+      .where('p.id IS NULL');
     if (search) {
-      qb.where('LOWER(m.name) LIKE :search', {
+      qb.andWhere('LOWER(m.name) LIKE :search', {
         search: `%${search.toLowerCase()}%`,
       });
     }

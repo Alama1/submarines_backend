@@ -15,8 +15,8 @@ export class Order {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  /** Short unique human-readable code shared with admin (e.g. SUB-7K9P) */
-  @Column({ unique: true, length: 16 })
+  /** Short unique human-readable code shared with admin (e.g. SUB-7K9P-2M4X-8QRT) */
+  @Column({ unique: true, length: 24 })
   orderCode: string;
 
   @Column()

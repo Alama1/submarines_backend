@@ -30,22 +30,45 @@ export class OrdersService {
     private readonly ds: DataSource,
   ) {}
 
-  /** Generates a human-friendly unique order code, e.g. SUB-7K9P */
+  /**
+   * Generates a unique, hard-to-guess order code, e.g. SUB-7K9P-2M4X-8QRT.
+   * 12 random characters from a 32-char alphabet (no 0/O, 1/I) in three
+   * groups — ~1.15e18 combinations, so confirmation codes can't be guessed
+   * to peek at other customers' orders.
+   */
   private async generateUniqueOrderCode(): Promise<string> {
     const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // Excludes confusing characters 0/O, 1/I
-    for (let attempt = 0; attempt < 10; attempt++) {
-      let code = 'SUB-';
-      const bytes = crypto.randomBytes(6);
-      for (let i = 0; i < 6; i++) {
-        code += chars[bytes[i] % chars.length];
+    const group = (): string => {
+      const bytes = crypto.randomBytes(4);
+      let out = '';
+      for (let i = 0; i < 4; i++) {
+        out += chars[bytes[i] % chars.length];
       }
+      return out;
+    };
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const code = `SUB-${group()}-${group()}-${group()}`;
       const existing = await this.orderRepo.findOne({ where: { orderCode: code } });
       if (!existing) {
         return code;
       }
     }
-    // Fallback if loop finishes
+    // Fallback if loop finishes (practically impossible with 32^12 combos)
     return `SUB-${Date.now().toString(36).toUpperCase()}`;
+  }
+
+  /**
+   * Masks a client name for public endpoints: keeps the first 2 and the
+   * last letter ("Alexander" -> "Al***r"). Short names only keep their
+   * first letter so they aren't fully revealed.
+   */
+  private maskClientName(name: string | null | undefined): string {
+    const trimmed = (name ?? '').trim();
+    if (trimmed.length <= 4) {
+      return trimmed ? `${trimmed.slice(0, 1)}***` : '';
+    }
+    return `${trimmed.slice(0, 2)}***${trimmed.slice(-1)}`;
   }
 
   async findAll(
@@ -107,7 +130,7 @@ export class OrdersService {
       orders: orders.map((o) => ({
         id: o.id,
         orderCode: o.orderCode,
-        clientName: o.clientName,
+        clientName: this.maskClientName(o.clientName),
         contactInfo: o.contactInfo,
         notes: o.notes,
         confirmedAt: o.confirmedAt,
@@ -145,7 +168,8 @@ export class OrdersService {
       .getOne();
 
     if (!order) throw new NotFoundException(`Order with code "${code}" not found`);
-    return order;
+    // Public lookup — mask the client name so codes can't be used to harvest names
+    return { ...order, clientName: this.maskClientName(order.clientName) };
   }
 
   async create(dto: CreateOrderDto): Promise<Order> {

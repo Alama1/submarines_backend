@@ -78,7 +78,8 @@ export const QuickConfirmModal: React.FC<QuickConfirmModalProps> = ({ onClose })
             </label>
             <input
               type="text"
-              placeholder="e.g. SUB-7K9P"
+              placeholder="e.g. SUB-7K9P-2M4X-8QRT"
+              maxLength={18}
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               autoFocus

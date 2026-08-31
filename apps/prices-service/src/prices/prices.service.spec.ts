@@ -2,7 +2,7 @@
 import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { AppSetting, BaseMaterial, MaterialSource } from '@ff14/entities';
+import { AppSetting, BaseMaterial, MaterialSource, SubmarinePart } from '@ff14/entities';
 import { UNIVERSALIS_WORLD_KEY } from '@ff14/types';
 import { PricesService } from './prices.service';
 
@@ -27,7 +27,9 @@ describe('PricesService', () => {
   beforeEach(async () => {
     repo = {
       createQueryBuilder: jest.fn().mockReturnValue({
+        leftJoin: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
         skip: jest.fn().mockReturnThis(),
         take: jest.fn().mockReturnThis(),
@@ -55,6 +57,7 @@ describe('PricesService', () => {
       providers: [
         PricesService,
         { provide: getRepositoryToken(BaseMaterial), useValue: repo },
+        { provide: getRepositoryToken(SubmarinePart), useValue: { find: jest.fn() } },
         { provide: getRepositoryToken(AppSetting), useValue: settingRepo },
         { provide: CACHE_MANAGER, useValue: cache },
         { provide: 'PRICE_RMQ_CLIENT', useValue: rmqClient },
