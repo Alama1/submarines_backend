@@ -5,7 +5,8 @@ import { Repository } from 'typeorm';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import { BaseMaterial } from '@ff14/entities';
+import { AppSetting, BaseMaterial } from '@ff14/entities';
+import { UNIVERSALIS_WORLD_KEY } from '@ff14/types';
 import { UniversalisClient } from '../universalis/universalis.client';
 
 @Injectable()
@@ -16,6 +17,8 @@ export class PriceRefreshJob {
   constructor(
     @InjectRepository(BaseMaterial)
     private readonly materialRepo: Repository<BaseMaterial>,
+    @InjectRepository(AppSetting)
+    private readonly settingRepo: Repository<AppSetting>,
     private readonly universalis: UniversalisClient,
     @Optional() @Inject(CACHE_MANAGER) private readonly cache?: Cache,
   ) {}
@@ -45,6 +48,12 @@ export class PriceRefreshJob {
     let updatedCount = 0;
 
     try {
+      // 0. Resolve the target world: DB setting -> env -> 'Louisoix'
+      const settingRow = await this.settingRepo.findOne({
+        where: { key: UNIVERSALIS_WORLD_KEY },
+      });
+      const world = settingRow?.value?.trim() || this.universalis.getWorld();
+
       // 1. Fetch all materials that have a valid Universalis itemId
       const materials = await this.materialRepo
         .createQueryBuilder('m')
@@ -56,7 +65,7 @@ export class PriceRefreshJob {
         return 0;
       }
 
-      this.logger.log(`Found ${materials.length} materials with itemId to sync.`);
+      this.logger.log(`Found ${materials.length} materials with itemId to sync (world: "${world}").`);
 
       // 2. Batch item IDs into chunks of 50
       const chunkSize = 50;
@@ -72,7 +81,7 @@ export class PriceRefreshJob {
 
         if (!itemIds.length) continue;
 
-        const priceMap = await this.universalis.fetchMarketPrices(itemIds);
+        const priceMap = await this.universalis.fetchMarketPrices(itemIds, world);
 
         for (const mat of chunk) {
           if (mat.itemId && priceMap.has(mat.itemId)) {

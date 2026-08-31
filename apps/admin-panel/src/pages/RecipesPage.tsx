@@ -448,8 +448,8 @@ export const RecipesPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Part Editor Drawer / Form */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+          {/* Part Editor Drawer / Form — sticks while the table scrolls */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 lg:sticky lg:top-6 lg:self-start lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <h3 className="font-semibold text-slate-900 text-sm">
                 {isEditingPart ? (selectedPart ? 'Edit Component' : 'New Component') : 'Component Inspector'}
@@ -769,8 +769,8 @@ export const RecipesPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Material Editor Panel */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+          {/* Material Editor Panel — sticks while the table scrolls */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 lg:sticky lg:top-6 lg:self-start lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <h3 className="font-semibold text-slate-900 text-sm">
                 {isEditingMat ? (selectedMat ? 'Edit Material' : 'New Base Material') : 'Material Inspector'}

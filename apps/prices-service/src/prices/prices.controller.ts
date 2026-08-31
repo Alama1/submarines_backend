@@ -12,6 +12,7 @@
 import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { PricesService } from './prices.service';
 import { UpdatePriceDto } from './dto/update-price.dto';
+import { UpdateWorldDto } from './dto/update-world.dto';
 
 @Controller('prices')
 export class PricesController {
@@ -35,6 +36,20 @@ export class PricesController {
   @Post('refresh')
   refresh() {
     return this.svc.triggerRefresh();
+  }
+
+  // ── Universalis settings (must be declared before the :id routes) ──────
+
+  /** Current Universalis world used for market sync */
+  @Get('settings')
+  getUniversalisSettings() {
+    return this.svc.getUniversalisSettings();
+  }
+
+  /** Change the Universalis world used for market sync */
+  @Put('settings/world')
+  updateUniversalisWorld(@Body() dto: UpdateWorldDto) {
+    return this.svc.updateUniversalisWorld(dto);
   }
 
   @Get(':id')

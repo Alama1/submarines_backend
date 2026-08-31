@@ -1,14 +1,14 @@
-﻿import { Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { BaseMaterial } from '@ff14/entities';
+import { AppSetting, BaseMaterial } from '@ff14/entities';
 import { PricesController } from './prices.controller';
 import { PricesService } from './prices.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([BaseMaterial]),
+    TypeOrmModule.forFeature([BaseMaterial, AppSetting]),
     ClientsModule.registerAsync([
       {
         name: 'PRICE_RMQ_CLIENT',

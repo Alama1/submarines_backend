@@ -25,12 +25,16 @@ export class UniversalisClient {
   /**
    * Fetches latest market prices for a list of item IDs.
    * Returns a Map of itemId -> marketPrice (in gil).
+   * Pass `worldOverride` to sync a specific world (e.g. from app settings).
    */
-  async fetchMarketPrices(itemIds: number[]): Promise<Map<number, number>> {
+  async fetchMarketPrices(
+    itemIds: number[],
+    worldOverride?: string,
+  ): Promise<Map<number, number>> {
     const priceMap = new Map<number, number>();
     if (!itemIds.length) return priceMap;
 
-    const world = this.getWorld();
+    const world = worldOverride?.trim() || this.getWorld();
     const joinedIds = itemIds.join(',');
     const url = `${this.baseUrl}/${encodeURIComponent(world)}/${joinedIds}`;
 

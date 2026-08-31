@@ -24,9 +24,9 @@ const navItems = [
 
 export const Sidebar: React.FC = () => {
   return (
-    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 min-h-screen">
+    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 h-screen">
       {/* Brand */}
-      <div className="h-16 flex items-center px-6 gap-3 border-b border-slate-200">
+      <div className="h-16 flex items-center px-6 gap-3 border-b border-slate-200 flex-shrink-0">
         <div className="w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
           <Anchor className="w-5 h-5" />
         </div>
@@ -37,7 +37,7 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
@@ -59,7 +59,7 @@ export const Sidebar: React.FC = () => {
       </nav>
 
       {/* Footer info */}
-      <div className="p-4 border-t border-slate-200 text-xs text-slate-400">
+      <div className="p-4 border-t border-slate-200 text-xs text-slate-400 flex-shrink-0">
         <p className="font-medium text-slate-500">Louisoix FC Workshop</p>
         <p>Real-time Submersible Suite</p>
       </div>

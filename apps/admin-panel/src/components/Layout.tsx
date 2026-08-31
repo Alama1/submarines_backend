@@ -5,12 +5,14 @@ import { Header } from './Header';
 
 export const Layout: React.FC = () => {
   return (
-    <div className="flex min-h-screen bg-slate-100 text-slate-900">
+    <div className="flex h-screen overflow-hidden bg-slate-100 text-slate-900">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Header />
-        <main className="flex-1 p-6 max-w-7xl w-full mx-auto">
-          <Outlet />
+        <main className="flex-1 overflow-y-auto">
+          <div className="p-6 max-w-7xl w-full mx-auto">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>
