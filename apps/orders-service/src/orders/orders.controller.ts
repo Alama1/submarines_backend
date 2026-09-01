@@ -21,13 +21,16 @@ export class OrdersController {
 
   @Get()
   findAll(
-    @Query('status') status?: OrderStatus,
+    @Query('status') status?: string,
     @Query('page') page = '1',
     @Query('limit') limit = '20',
   ) {
     const p = Math.max(1, parseInt(page, 10) || 1);
     const l = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
-    return this.svc.findAll(status, p, l);
+    const statuses = status
+      ? (status.split(',').filter(Boolean) as OrderStatus[])
+      : undefined;
+    return this.svc.findAll(statuses, p, l);
   }
 
   /** Public endpoint: all currently in-progress orders with live part stock levels */

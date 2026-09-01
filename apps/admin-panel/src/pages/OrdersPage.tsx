@@ -20,13 +20,17 @@ const statusSelectClass =
 
 export const OrdersPage: React.FC = () => {
   const queryClient = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('active');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   const { data, isLoading } = useQuery<{ items: Order[]; total: number }>({
     queryKey: ['orders', statusFilter],
     queryFn: async () => {
-      const url = statusFilter === 'all' ? '/orders?limit=100' : `/orders?status=${statusFilter}&limit=100`;
+      const statusParam =
+        statusFilter === 'all'
+          ? ''
+          : `status=${statusFilter === 'active' ? 'confirmed,in_progress' : statusFilter}&`;
+      const url = `/orders?${statusParam}limit=100`;
       return (await api.get(url)).data;
     },
   });
@@ -68,7 +72,7 @@ export const OrdersPage: React.FC = () => {
 
       {/* Filter Tabs — pending orders are hidden until activated by code */}
       <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
-        {['all', 'confirmed', 'in_progress', 'finished', 'fulfilled', 'cancelled'].map((tab) => (
+        {['active', 'all', 'confirmed', 'in_progress', 'finished', 'fulfilled', 'cancelled'].map((tab) => (
           <button
             key={tab}
             onClick={() => setStatusFilter(tab)}

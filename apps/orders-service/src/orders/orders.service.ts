@@ -84,7 +84,7 @@ export class OrdersService {
   }
 
   async findAll(
-    status?: OrderStatus,
+    statuses?: OrderStatus[],
     page = 1,
     limit = 20,
   ): Promise<{ items: Order[]; total: number }> {
@@ -96,8 +96,8 @@ export class OrdersService {
       // They only become visible once activated with their confirmation code.
       .where('o.status != :hidden', { hidden: 'pending' });
 
-    if (status) {
-      qb.andWhere('o.status = :status', { status });
+    if (statuses && statuses.length > 0) {
+      qb.andWhere('o.status IN (:...statuses)', { statuses });
     }
 
     const [items, total] = await qb
