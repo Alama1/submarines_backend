@@ -7,7 +7,10 @@ import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import * as crypto from 'crypto';
 import {
+  BaseMaterial,
   BulkDiscount,
+  expandAllPartMaterials,
+  ExpandedMaterialRequirement,
   Order,
   OrderItem,
   OrderStatus,
@@ -129,6 +132,15 @@ export class OrdersService {
         unitPrice: number;
         lineTotal: number;
       }>;
+      missingMaterials: Array<{
+        materialId: string;
+        name: string;
+        itemId: number | null;
+        needed: number;
+        available: number;
+        missing: number;
+        isPart: boolean;
+      }>;
     }>;
   }> {
     const orders = await this.orderRepo
@@ -138,6 +150,26 @@ export class OrdersService {
       .where('o.status = :status', { status: 'in_progress' })
       .orderBy('o.confirmedAt', 'ASC')
       .getMany();
+
+    const allParts = await this.partRepo.find({
+      relations: ['materials', 'materials.material'],
+    });
+    const partsById = new Map<string, SubmarinePart>(allParts.map((p) => [p.id, p]));
+    const partsByName = new Map<string, SubmarinePart>(
+      allParts.map((p) => [p.name.toLowerCase(), p]),
+    );
+    const matById = new Map<string, BaseMaterial>();
+    for (const p of allParts) {
+      for (const pm of p.materials ?? []) {
+        if (pm.material) matById.set(pm.material.id, pm.material);
+      }
+    }
+    const expanded = expandAllPartMaterials(allParts);
+
+    // Stock is shared across simultaneous builds: earlier orders (by confirmedAt,
+    // the same order the feed is displayed in) claim materials first, and later
+    // orders only get what's left — so their missing lists reflect reality.
+    const availableStock = new Map<string, number>();
 
     return {
       orders: orders.map((o) => ({
@@ -159,8 +191,134 @@ export class OrdersService {
           unitPrice: item.unitPrice,
           lineTotal: item.lineTotal,
         })),
+        missingMaterials: this.computeMissingMaterials(
+          o,
+          partsById,
+          partsByName,
+          matById,
+          expanded,
+          availableStock,
+        ),
       })),
     };
+  }
+
+  /**
+   * Computes what materials an in-progress order is still short of, using the
+   * recipes (PartMaterial rows) of every part that still needs crafting.
+   *
+   * Follows the same convention as RecipesService.recalculateMaterialTargets:
+   * part-as-material rows (modified parts requiring their base part) are listed
+   * directly with the nested part's stock as coverage, while raw materials come
+   * from the fully expanded recipe chain. Units covered by existing intermediate
+   * part stock are subtracted from the raw requirements so the shopping list
+   * stays accurate.
+   */
+  private computeMissingMaterials(
+    order: Order,
+    partsById: Map<string, SubmarinePart>,
+    partsByName: Map<string, SubmarinePart>,
+    matById: Map<string, BaseMaterial>,
+    expanded: Map<string, ExpandedMaterialRequirement[]>,
+    availableStock: Map<string, number>,
+  ): Array<{
+    materialId: string;
+    name: string;
+    itemId: number | null;
+    needed: number;
+    available: number;
+    missing: number;
+    isPart: boolean;
+  }> {
+    const rawNeeds = new Map<string, { mat: BaseMaterial; needed: number }>();
+    const partNeeds = new Map<
+      string,
+      { mat: BaseMaterial; part: SubmarinePart; needed: number }
+    >();
+
+    const addRaw = (mat: BaseMaterial, qty: number) => {
+      const entry = rawNeeds.get(mat.id) ?? { mat, needed: 0 };
+      entry.needed = Math.max(0, entry.needed + qty);
+      rawNeeds.set(mat.id, entry);
+    };
+
+    for (const item of order.items ?? []) {
+      const part = partsById.get(item.part?.id ?? '') ?? item.part;
+      if (!part) continue;
+      const toCraft = Math.max(0, item.quantity - part.stock);
+      if (toCraft <= 0) continue;
+
+      for (const req of expanded.get(part.id) ?? []) {
+        const mat = matById.get(req.materialId);
+        if (mat) addRaw(mat, toCraft * req.quantity);
+      }
+
+      for (const pm of part.materials ?? []) {
+        if (!pm.material) continue;
+        const nested = partsByName.get(pm.material.name.toLowerCase());
+        if (!nested || nested.id === part.id) continue;
+        const entry = partNeeds.get(pm.material.id) ?? {
+          mat: pm.material,
+          part: nested,
+          needed: 0,
+        };
+        entry.needed += toCraft * pm.quantity;
+        partNeeds.set(pm.material.id, entry);
+      }
+    }
+
+    const missing: Array<{
+      materialId: string;
+      name: string;
+      itemId: number | null;
+      needed: number;
+      available: number;
+      missing: number;
+      isPart: boolean;
+    }> = [];
+
+    for (const { mat, part: nested, needed } of partNeeds.values()) {
+      const covered = Math.min(needed, nested.stock);
+      if (needed - covered > 0) {
+        missing.push({
+          materialId: mat.id,
+          name: mat.name,
+          itemId: mat.itemId,
+          needed,
+          available: covered,
+          missing: needed - covered,
+          isPart: true,
+        });
+      }
+      if (covered > 0) {
+        for (const req of expanded.get(nested.id) ?? []) {
+          const rawMat = matById.get(req.materialId);
+          if (rawMat) addRaw(rawMat, -covered * req.quantity);
+        }
+      }
+    }
+
+    for (const { mat, needed } of rawNeeds.values()) {
+      const available = availableStock.get(mat.id) ?? mat.currentStock;
+      const used = Math.min(needed, available);
+      availableStock.set(mat.id, available - used);
+      if (needed - used > 0) {
+        missing.push({
+          materialId: mat.id,
+          name: mat.name,
+          itemId: mat.itemId,
+          needed,
+          available: used,
+          missing: needed - used,
+          isPart: false,
+        });
+      }
+    }
+
+    missing.sort(
+      (a, b) => Number(b.isPart) - Number(a.isPart) || b.missing - a.missing,
+    );
+    return missing;
   }
 
   async findOne(id: string): Promise<Order> {

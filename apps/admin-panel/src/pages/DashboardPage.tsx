@@ -8,6 +8,7 @@ import {
   Clock,
   Hammer,
   AlertTriangle,
+  PackageX,
 } from 'lucide-react';
 import { StatusBadge } from '../components/StatusBadge';
 import { formatNumber } from '../lib/utils';
@@ -220,6 +221,48 @@ export const DashboardPage: React.FC = () => {
                         </div>
                       );
                     })}
+                  </div>
+
+                  {/* Missing materials for the parts still to craft */}
+                  <div className="pt-1">
+                    {order.missingMaterials.length > 0 ? (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
+                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-800 uppercase tracking-wide">
+                          <PackageX className="w-3.5 h-3.5" />
+                          Missing Materials ({order.missingMaterials.length})
+                        </div>
+                        <div className="space-y-1.5">
+                          {order.missingMaterials.map((mat) => (
+                            <div
+                              key={mat.materialId}
+                              className="flex items-center justify-between gap-2 text-xs"
+                            >
+                              <span className="text-slate-700 font-medium flex items-center gap-1.5 min-w-0">
+                                {mat.isPart ? (
+                                  <Hammer className="w-3 h-3 text-amber-600 flex-shrink-0" />
+                                ) : (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0"></span>
+                                )}
+                                <span className="truncate">{mat.name}</span>
+                              </span>
+                              <span className="font-mono text-[11px] whitespace-nowrap">
+                                <span className="text-slate-500">
+                                  have {formatNumber(mat.available)}
+                                </span>{' '}
+                                <span className="text-amber-700 font-bold">
+                                  missing {formatNumber(mat.missing)}
+                                </span>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                        <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                        All materials in stock — nothing missing to finish this order.
+                      </div>
+                    )}
                   </div>
 
                   {order.notes && (

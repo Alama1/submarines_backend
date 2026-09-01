@@ -75,4 +75,19 @@ export interface InProgressOrderFeedItem {
     unitPrice: number;
     lineTotal: number;
   }>;
+  missingMaterials: MissingMaterial[];
+}
+
+export interface MissingMaterial {
+  materialId: string;
+  name: string;
+  itemId: number | null;
+  /** Total units required to craft the parts still missing for this order */
+  needed: number;
+  /** Units still unclaimed by earlier in-progress orders (or covered by part stock) */
+  available: number;
+  /** needed - available (never below 0) */
+  missing: number;
+  /** True for part-as-material requirements (e.g. modified parts needing their base part) */
+  isPart: boolean;
 }
