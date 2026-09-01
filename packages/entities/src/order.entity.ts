@@ -22,6 +22,10 @@ export class Order {
   @Column()
   clientName: string;
 
+  /** When true, the client's name is hidden from public endpoints and shown as "Anonymous" */
+  @Column({ default: false })
+  isAnonymous: boolean;
+
   /** Optional Discord tag or in-game character contact */
   @Column({ type: 'text', nullable: true })
   contactInfo: string | null;

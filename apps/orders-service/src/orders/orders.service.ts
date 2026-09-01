@@ -74,6 +74,15 @@ export class OrdersService {
     return `${trimmed.slice(0, 2)}***${trimmed.slice(-1)}`;
   }
 
+  /**
+   * Public display name for an order: anonymous orders fully replace the
+   * name with "Anonymous" (not masked), everything else gets masked.
+   */
+  private publicClientName(order: Pick<Order, 'clientName' | 'isAnonymous'>): string {
+    if (order.isAnonymous) return 'Anonymous';
+    return this.maskClientName(order.clientName);
+  }
+
   async findAll(
     status?: OrderStatus,
     page = 1,
@@ -105,6 +114,7 @@ export class OrdersService {
       id: string;
       orderCode: string;
       clientName: string;
+      isAnonymous: boolean;
       contactInfo: string | null;
       notes: string | null;
       confirmedAt: Date | null;
@@ -133,7 +143,8 @@ export class OrdersService {
       orders: orders.map((o) => ({
         id: o.id,
         orderCode: o.orderCode,
-        clientName: this.maskClientName(o.clientName),
+        clientName: this.publicClientName(o),
+        isAnonymous: o.isAnonymous,
         contactInfo: o.contactInfo,
         notes: o.notes,
         confirmedAt: o.confirmedAt,
@@ -172,7 +183,10 @@ export class OrdersService {
 
     if (!order) throw new NotFoundException(`Order with code "${code}" not found`);
     // Public lookup — mask the client name so codes can't be used to harvest names
-    return { ...order, clientName: this.maskClientName(order.clientName) };
+    return {
+      ...order,
+      clientName: this.publicClientName(order),
+    };
   }
 
   async create(dto: CreateOrderDto): Promise<Order> {
@@ -240,6 +254,7 @@ export class OrdersService {
       const order = em.create(Order, {
         orderCode,
         clientName: dto.clientName,
+        isAnonymous: dto.isAnonymous ?? false,
         contactInfo: dto.contactInfo ?? null,
         rawText: dto.rawText ?? null,
         notes: dto.notes ?? null,

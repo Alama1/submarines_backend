@@ -1,5 +1,6 @@
 ﻿import {
   IsArray,
+  IsBoolean,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -31,6 +32,11 @@ export class CreateOrderDto {
   @IsString()
   @IsNotEmpty()
   clientName: string;
+
+  /** When true, the client's name is shown as "Anonymous" on public endpoints instead of masked */
+  @IsOptional()
+  @IsBoolean()
+  isAnonymous?: boolean;
 
   /** Optional Discord tag or character name for client contact */
   @IsOptional()

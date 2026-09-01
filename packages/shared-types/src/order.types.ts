@@ -18,6 +18,7 @@ export interface Order {
   id: string;
   orderCode: string;
   clientName: string;
+  isAnonymous?: boolean;
   contactInfo?: string | null;
   rawText?: string | null;
   subtotal: number;
@@ -43,6 +44,7 @@ export interface BulkDiscount {
 
 export interface CreateOrderDto {
   clientName: string;
+  isAnonymous?: boolean;
   contactInfo?: string;
   rawText?: string;
   items: Array<{
@@ -58,6 +60,7 @@ export interface InProgressOrderFeedItem {
   id: string;
   orderCode: string;
   clientName: string;
+  isAnonymous: boolean;
   contactInfo: string | null;
   notes: string | null;
   confirmedAt: string | null;
