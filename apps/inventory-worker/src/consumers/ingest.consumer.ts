@@ -143,6 +143,27 @@ export class IngestConsumer {
       }
     }
 
+    // ── Step 4: items absent from the snapshot ─────────────────────────────
+    // The plugin sends a FULL inventory snapshot. A tracked item that is no
+    // longer reported is no longer owned, so its stock must drop (otherwise
+    // it freezes at the last non-zero value when items are traded/sold away).
+    for (const part of allParts) {
+      if (part.itemId && !stockByItemId.has(part.itemId) && part.stock !== 0) {
+        part.stock = 0;
+        partsToSave.push(part);
+      }
+    }
+    for (const mat of allMaterials) {
+      if (!mat.itemId || stockByItemId.has(mat.itemId)) continue;
+      // Keep the NPC pinning rule for absent NPC-sourced materials
+      const target =
+        mat.whereToBuy === MaterialSource.NPC ? mat.desiredQuantity : 0;
+      if (mat.currentStock !== target) {
+        mat.currentStock = target;
+        matsToSave.push(mat);
+      }
+    }
+
     await Promise.all([
       matsToSave.length  ? this.materialRepo.save(matsToSave)  : Promise.resolve(),
       partsToSave.length ? this.partRepo.save(partsToSave)     : Promise.resolve(),
