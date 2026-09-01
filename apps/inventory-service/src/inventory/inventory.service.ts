@@ -136,7 +136,11 @@ export class InventoryService {
       });
     }
     const [materials, total] = await qb
-      .orderBy('(m.desired_quantity - m.current_stock)', 'DESC')
+      // Order by a named select alias: TypeORM's pagination-with-joins path
+      // treats dotted orderBy keys as alias.property, so raw arithmetic
+      // expressions (e.g. "(m.desired_quantity - m.current_stock)") break it
+      .addSelect('m.desired_quantity - m.current_stock', 'deficit_calc')
+      .orderBy('deficit_calc', 'DESC')
       .skip((page - 1) * limit)
       .take(limit)
       .getManyAndCount();
