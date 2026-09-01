@@ -115,8 +115,10 @@ export class IngestConsumer {
     const partsToSave: SubmarinePart[] = [];
 
     for (const [itemId, { qty, name }] of stockByItemId.entries()) {
+      const nameKey = name.toLowerCase();
+
       // Try base_materials first
-      const mat = matByItemId.get(itemId) ?? matByName.get(name.toLowerCase());
+      const mat = matByItemId.get(itemId) ?? matByName.get(nameKey);
       if (mat) {
         // NPC-sourced items are always stocked to the max (target quantity),
         // regardless of what the plugin reports
@@ -125,18 +127,16 @@ export class IngestConsumer {
             mat.currentStock = mat.desiredQuantity;
             matsToSave.push(mat);
           }
-          continue;
-        }
-
-        if (mat.currentStock !== qty) {
+        } else if (mat.currentStock !== qty) {
           mat.currentStock = qty;
           matsToSave.push(mat);
-          continue;
         }
       }
 
-      // Then try submarine_parts (e.g. crafted hulls, sterns, bows stored in retainers)
-      const part = partByItemId.get(itemId) ?? partByName.get(name.toLowerCase());
+      // Also try submarine_parts — crafted parts exist in base_materials too
+      // (they are ingredients of the "Modified" recipes), so the same itemId
+      // must be able to update both tables
+      const part = partByItemId.get(itemId) ?? partByName.get(nameKey);
       if (part && part.stock !== qty) {
         part.stock = qty;
         partsToSave.push(part);
