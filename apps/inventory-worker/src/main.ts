@@ -13,7 +13,13 @@ async function bootstrap(): Promise<void> {
         ],
         queue: 'inventory_ingest',
         queueOptions: { durable: true },
-        noAck: false,
+        // Nest's ServerRMQ never acks event-pattern messages (emit() sends no
+        // packet id, so the event path skips acking entirely). With noAck:false
+        // + prefetchCount:1 the first message stays unacked forever and the
+        // consumer silently stalls after processing exactly one ingest.
+        // Snapshots are idempotent full-inventory sends every ~60s, so
+        // at-most-once delivery is safe.
+        noAck: true,
         prefetchCount: 1,
       },
     },
