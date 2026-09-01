@@ -19,6 +19,9 @@ import { UpdateOrderNotesDto } from './dto/update-notes.dto';
 
 @Injectable()
 export class OrdersService {
+  /** Only these part types count toward bulk-discount tiers; product rows like repair kits (partType 'Materials') do not */
+  private static readonly DISCOUNTABLE_PART_TYPES = new Set(['bow', 'bridge', 'hull', 'stern']);
+
   constructor(
     @InjectRepository(Order)
     private readonly orderRepo: Repository<Order>,
@@ -214,7 +217,14 @@ export class OrdersService {
     }
 
     // 2. Fetch bulk discounts and apply the highest matching tier based on total parts quantity
-    const totalPartsCount = preparedItems.reduce((acc, i) => acc + i.quantity, 0);
+    const totalPartsCount = preparedItems.reduce(
+      (acc, i) =>
+        acc +
+        (OrdersService.DISCOUNTABLE_PART_TYPES.has(i.part.partType.toLowerCase())
+          ? i.quantity
+          : 0),
+      0,
+    );
     const discounts = await this.discountRepo.find({
       order: { threshold: 'DESC' },
     });
