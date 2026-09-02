@@ -146,3 +146,117 @@ describe('OrdersService — computeMissingMaterials', () => {
     });
   });
 });
+
+describe('OrdersService — computeAggregate', () => {
+  const svc = new OrdersService(
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+  );
+
+  const mat = (id: string, name: string, currentStock: number): BaseMaterial =>
+    ({ id, name, itemId: 1000, currentStock }) as BaseMaterial;
+
+  const part = (
+    id: string,
+    name: string,
+    stock: number,
+    materials: Array<{ material: BaseMaterial; quantity: number }>,
+  ): SubmarinePart =>
+    ({
+      id,
+      name,
+      stock,
+      materials: materials.map(
+        (m) => ({ material: m.material, quantity: m.quantity }) as PartMaterial,
+      ),
+    }) as SubmarinePart;
+
+  const order = (items: Array<{ part: SubmarinePart; quantity: number }>): Order =>
+    ({ items: items.map(({ part, quantity }) => ({ part, quantity }) as OrderItem) }) as Order;
+
+  const aggregate = (orders: Order[], allParts: SubmarinePart[]) => {
+    const partsById = new Map(allParts.map((p) => [p.id, p]));
+    const partsByName = new Map(allParts.map((p) => [p.name.toLowerCase(), p]));
+    const matById = new Map<string, BaseMaterial>();
+    for (const p of allParts) {
+      for (const pm of p.materials ?? []) {
+        if (pm.material) matById.set(pm.material.id, pm.material);
+      }
+    }
+    const expanded: Map<string, ExpandedMaterialRequirement[]> =
+      expandAllPartMaterials(allParts);
+    return (svc as any).computeAggregate(
+      orders,
+      partsById,
+      partsByName,
+      matById,
+      expanded,
+    );
+  };
+
+  it('sums requirements across orders and reports the shortfall vs stock', () => {
+    const iron = mat('iron', 'Iron Ore', 15);
+    const hull = part('shark_hull', 'Shark Hull', 0, [
+      { material: iron, quantity: 5 },
+    ]);
+
+    const agg = aggregate(
+      [order([{ part: hull, quantity: 2 }]), order([{ part: hull, quantity: 2 }])],
+      [hull],
+    );
+
+    expect(agg.materials).toHaveLength(1);
+    expect(agg.materials[0]).toMatchObject({
+      materialId: 'iron',
+      name: 'Iron Ore',
+      needed: 20,
+      available: 15,
+      missing: 5,
+      isPart: false,
+    });
+  });
+
+  it('counts nested part stock once across orders and subtracts covered raw requirements', () => {
+    const iron = mat('iron', 'Iron Ore', 5);
+    const cobalt = mat('cobalt', 'Cobalt Ore', 100);
+    const baseHull = part('shark_hull', 'Shark Hull', 1, [
+      { material: iron, quantity: 5 },
+    ]);
+    const modHull = part('shark_hull_mod', 'Shark Modified Hull', 0, [
+      { material: baseHull as any, quantity: 1 },
+      { material: cobalt, quantity: 3 },
+    ]);
+
+    const agg = aggregate(
+      [order([{ part: modHull, quantity: 1 }]), order([{ part: modHull, quantity: 1 }])],
+      [baseHull, modHull],
+    );
+
+    const partEntry = agg.materials.find((m: any) => m.materialId === 'shark_hull');
+    expect(partEntry).toMatchObject({
+      needed: 2,
+      available: 1,
+      missing: 1,
+      isPart: true,
+    });
+
+    const ironEntry = agg.materials.find((m: any) => m.materialId === 'iron');
+    expect(ironEntry).toMatchObject({ needed: 5, available: 5, missing: 0 });
+
+    const cobaltEntry = agg.materials.find((m: any) => m.materialId === 'cobalt');
+    expect(cobaltEntry).toMatchObject({ needed: 6, available: 100, missing: 0 });
+  });
+
+  it('ignores parts already fully covered by stock', () => {
+    const iron = mat('iron', 'Iron Ore', 0);
+    const hull = part('shark_hull', 'Shark Hull', 3, [
+      { material: iron, quantity: 5 },
+    ]);
+
+    const agg = aggregate([order([{ part: hull, quantity: 3 }])], [hull]);
+
+    expect(agg.materials).toEqual([]);
+  });
+});

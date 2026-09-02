@@ -4,7 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheModule } from '@nestjs/cache-manager';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
-import { AppSetting, BaseMaterial, PartMaterial, SubmarinePart } from '@ff14/entities';
+import { AppSetting, BaseMaterial, PartMaterial, PartSet, PartSetItem, SubmarinePart } from '@ff14/entities';
 import { HealthController } from './health/health.controller';
 import { PricesModule } from './prices/prices.module';
 
@@ -22,7 +22,7 @@ import { PricesModule } from './prices/prices.module';
         database: cfg.get<string>('POSTGRES_DB', 'ff14_db'),
         username: cfg.get<string>('POSTGRES_USER', 'ff14'),
         password: cfg.get<string>('POSTGRES_PASSWORD', 'ff14local'),
-        entities: [AppSetting, BaseMaterial, PartMaterial, SubmarinePart],
+        entities: [AppSetting, BaseMaterial, PartMaterial, SubmarinePart, PartSet, PartSetItem],
         migrations: [join(__dirname, '../../..', 'packages/entities/dist/migrations/*.js')],
         migrationsRun: true,
         namingStrategy: new SnakeNamingStrategy(),

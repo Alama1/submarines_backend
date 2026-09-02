@@ -141,7 +141,26 @@ export class OrdersService {
         missing: number;
         isPart: boolean;
       }>;
+      financials: {
+        revenue: number;
+        materialCost: number;
+        profit: number;
+      };
     }>;
+    aggregate: {
+      revenue: number;
+      materialCost: number;
+      profit: number;
+      materials: Array<{
+        materialId: string;
+        name: string;
+        itemId: number | null;
+        needed: number;
+        available: number;
+        missing: number;
+        isPart: boolean;
+      }>;
+    };
   }> {
     const orders = await this.orderRepo
       .createQueryBuilder('o')
@@ -166,22 +185,30 @@ export class OrdersService {
     }
     const expanded = expandAllPartMaterials(allParts);
 
+    // Live crafting cost for one unit of every part, using each material's
+    // effective price (manual override > market > NPC)
+    const costPerPart = new Map<string, number>();
+    for (const p of allParts) {
+      let cost = 0;
+      for (const req of expanded.get(p.id) ?? []) {
+        const mat = matById.get(req.materialId);
+        const unit = mat ? (mat.myPrice ?? mat.marketPrice ?? mat.npcPrice ?? 0) : 0;
+        cost += unit * req.quantity;
+      }
+      costPerPart.set(p.id, cost);
+    }
+
     // Stock is shared across simultaneous builds: earlier orders (by confirmedAt,
     // the same order the feed is displayed in) claim materials first, and later
     // orders only get what's left — so their missing lists reflect reality.
     const availableStock = new Map<string, number>();
 
-    return {
-      orders: orders.map((o) => ({
-        id: o.id,
-        orderCode: o.orderCode,
-        clientName: this.publicClientName(o),
-        isAnonymous: o.isAnonymous,
-        contactInfo: o.contactInfo,
-        notes: o.notes,
-        confirmedAt: o.confirmedAt,
-        createdAt: o.createdAt,
-        items: (o.items ?? []).map((item) => ({
+    const mapped = orders.map((o) => {
+      let materialCost = 0;
+      const items = (o.items ?? []).map((item) => {
+        const part = partsById.get(item.part?.id ?? '') ?? item.part;
+        if (part) materialCost += (costPerPart.get(part.id) ?? 0) * item.quantity;
+        return {
           partId: item.part?.id ?? '',
           partName: item.partName,
           partType: item.partType,
@@ -190,7 +217,19 @@ export class OrdersService {
           stock: item.part?.stock ?? 0,
           unitPrice: item.unitPrice,
           lineTotal: item.lineTotal,
-        })),
+        };
+      });
+
+      return {
+        id: o.id,
+        orderCode: o.orderCode,
+        clientName: this.publicClientName(o),
+        isAnonymous: o.isAnonymous,
+        contactInfo: o.contactInfo,
+        notes: o.notes,
+        confirmedAt: o.confirmedAt,
+        createdAt: o.createdAt,
+        items,
         missingMaterials: this.computeMissingMaterials(
           o,
           partsById,
@@ -199,8 +238,154 @@ export class OrdersService {
           expanded,
           availableStock,
         ),
-      })),
+        financials: {
+          revenue: o.total,
+          materialCost,
+          profit: o.total - materialCost,
+        },
+      };
+    });
+
+    const aggregate = this.computeAggregate(
+      orders,
+      partsById,
+      partsByName,
+      matById,
+      expanded,
+    );
+
+    const revenue = mapped.reduce((sum, o) => sum + o.financials.revenue, 0);
+    const materialCost = mapped.reduce(
+      (sum, o) => sum + o.financials.materialCost,
+      0,
+    );
+
+    return {
+      orders: mapped,
+      aggregate: {
+        revenue,
+        materialCost,
+        profit: revenue - materialCost,
+        materials: aggregate.materials,
+      },
     };
+  }
+
+  /**
+   * Aggregates the raw material and part requirements of every in-progress
+   * order into a single shopping list, then reports the shortfall against
+   * current stock — so big simultaneous orders that together eat the whole
+   * stock are visible in one place (unlike the per-order lists, which
+   * allocate shared stock sequentially).
+   */
+  private computeAggregate(
+    orders: Order[],
+    partsById: Map<string, SubmarinePart>,
+    partsByName: Map<string, SubmarinePart>,
+    matById: Map<string, BaseMaterial>,
+    expanded: Map<string, ExpandedMaterialRequirement[]>,
+  ): {
+    materials: Array<{
+      materialId: string;
+      name: string;
+      itemId: number | null;
+      needed: number;
+      available: number;
+      missing: number;
+      isPart: boolean;
+    }>;
+  } {
+    // Units still to craft per part across all in-progress orders
+    const demandByPart = new Map<string, number>();
+    for (const o of orders) {
+      for (const item of o.items ?? []) {
+        const part = partsById.get(item.part?.id ?? '') ?? item.part;
+        if (!part) continue;
+        const toCraft = Math.max(0, item.quantity - part.stock);
+        if (toCraft <= 0) continue;
+        demandByPart.set(part.id, (demandByPart.get(part.id) ?? 0) + toCraft);
+      }
+    }
+
+    const rawNeeds = new Map<string, number>();
+    const partNeeds = new Map<string, number>();
+
+    for (const [partId, toCraft] of demandByPart) {
+      const part = partsById.get(partId)!;
+      for (const req of expanded.get(part.id) ?? []) {
+        rawNeeds.set(req.materialId, (rawNeeds.get(req.materialId) ?? 0) + toCraft * req.quantity);
+      }
+      for (const pm of part.materials ?? []) {
+        if (!pm.material) continue;
+        const nested = partsByName.get(pm.material.name.toLowerCase());
+        if (!nested || nested.id === part.id) continue;
+        partNeeds.set(nested.id, (partNeeds.get(nested.id) ?? 0) + toCraft * pm.quantity);
+      }
+    }
+
+    // Nested part stock covers part-as-material needs; covered units remove
+    // their own raw requirements (they are already crafted)
+    const coveredByPart = new Map<string, number>();
+    for (const [nestedId, needed] of partNeeds) {
+      const nested = partsById.get(nestedId);
+      if (!nested) continue;
+      const covered = Math.min(needed, nested.stock);
+      coveredByPart.set(nestedId, covered);
+      if (covered > 0) {
+        for (const req of expanded.get(nested.id) ?? []) {
+          rawNeeds.set(req.materialId, (rawNeeds.get(req.materialId) ?? 0) - covered * req.quantity);
+        }
+      }
+    }
+
+    const materials: Array<{
+      materialId: string;
+      name: string;
+      itemId: number | null;
+      needed: number;
+      available: number;
+      missing: number;
+      isPart: boolean;
+    }> = [];
+
+    for (const [nestedId, needed] of partNeeds) {
+      const nested = partsById.get(nestedId);
+      if (!nested) continue;
+      const covered = coveredByPart.get(nestedId) ?? 0;
+      materials.push({
+        materialId: nested.id,
+        name: nested.name,
+        itemId: nested.itemId,
+        needed,
+        available: covered,
+        missing: needed - covered,
+        isPart: true,
+      });
+    }
+
+    for (const [materialId, needed] of rawNeeds) {
+      if (needed <= 0) continue;
+      const mat = matById.get(materialId);
+      if (!mat) continue;
+      materials.push({
+        materialId,
+        name: mat.name,
+        itemId: mat.itemId,
+        needed,
+        available: mat.currentStock,
+        missing: Math.max(0, needed - mat.currentStock),
+        isPart: false,
+      });
+    }
+
+    materials.sort(
+      (a, b) =>
+        Number(b.isPart) - Number(a.isPart) ||
+        b.missing - a.missing ||
+        a.name.localeCompare(b.name),
+    );
+
+    return { materials };
   }
 
   /**

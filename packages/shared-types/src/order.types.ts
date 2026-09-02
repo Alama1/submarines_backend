@@ -76,6 +76,41 @@ export interface InProgressOrderFeedItem {
     lineTotal: number;
   }>;
   missingMaterials: MissingMaterial[];
+  /** Live profitability of the whole order: revenue (after discount) vs current material prices */
+  financials: OrderFinancials;
+}
+
+/** Revenue vs material cost for an order (materials valued at effective prices) */
+export interface OrderFinancials {
+  /** Order total after discount */
+  revenue: number;
+  /** Cost of raw materials to craft every part in the order */
+  materialCost: number;
+  /** revenue - materialCost */
+  profit: number;
+}
+
+/** Requirements aggregated across ALL in-progress orders */
+export interface InProgressAggregate {
+  revenue: number;
+  materialCost: number;
+  profit: number;
+  /** Every material required by any in-progress order, with the shortfall vs current stock */
+  materials: InProgressMaterialRequirement[];
+}
+
+export interface InProgressMaterialRequirement {
+  materialId: string;
+  name: string;
+  itemId: number | null;
+  /** Total units required across all in-progress orders */
+  needed: number;
+  /** Current stock covering the requirement */
+  available: number;
+  /** needed - available (never below 0) */
+  missing: number;
+  /** True for part-as-material requirements (e.g. modified parts needing their base part) */
+  isPart: boolean;
 }
 
 export interface MissingMaterial {

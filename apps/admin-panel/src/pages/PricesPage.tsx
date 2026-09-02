@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { formatGil } from '../lib/utils';
 import { RefreshCw, Edit2, Save, X, Search } from 'lucide-react';
+import { PartSetsPanel } from '../components/PartSetsPanel';
 
 export const PricesPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -50,6 +51,8 @@ export const PricesPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <PartSetsPanel />
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900 mb-1">Market Pricing & Valuation</h2>

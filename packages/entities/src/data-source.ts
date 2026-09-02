@@ -10,6 +10,8 @@ import { AppSetting } from './app-setting.entity';
 import { Order } from './order.entity';
 import { OrderItem } from './order-item.entity';
 import { BulkDiscount } from './bulk-discount.entity';
+import { PartSet } from './part-set.entity';
+import { PartSetItem } from './part-set-item.entity';
 
 dotenv.config({ path: '../../.env' });
 dotenv.config({ path: '.env.local' });
@@ -21,7 +23,7 @@ export const AppDataSource = new DataSource({
   database: process.env.POSTGRES_DB ?? 'ff14_db',
   username: process.env.POSTGRES_USER ?? 'ff14',
   password: process.env.POSTGRES_PASSWORD ?? 'ff14local',
-  entities: [BaseMaterial, PartMaterial, SubmarinePart, MaterialClaim, AppSetting, Order, OrderItem, BulkDiscount],
+  entities: [BaseMaterial, PartMaterial, SubmarinePart, MaterialClaim, AppSetting, Order, OrderItem, BulkDiscount, PartSet, PartSetItem],
   migrations: ['src/migrations/*.ts'],
   namingStrategy: new SnakeNamingStrategy(),
   synchronize: false,

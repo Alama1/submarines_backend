@@ -9,15 +9,17 @@ import {
   Hammer,
   AlertTriangle,
   PackageX,
+  TrendingUp,
 } from 'lucide-react';
 import { StatusBadge } from '../components/StatusBadge';
-import { formatNumber } from '../lib/utils';
-import { InProgressOrderFeedItem } from '@ff14/types';
+import { formatGil, formatNumber } from '../lib/utils';
+import { InProgressAggregate, InProgressOrderFeedItem } from '@ff14/types';
 
 export const DashboardPage: React.FC = () => {
   // Fetch in-progress orders (polled every 10s)
   const { data: inProgressData, isLoading: inProgressLoading } = useQuery<{
     orders: InProgressOrderFeedItem[];
+    aggregate: InProgressAggregate;
   }>({
     queryKey: ['in-progress-orders'],
     queryFn: async () => (await api.get('/orders/in-progress')).data,
@@ -37,6 +39,9 @@ export const DashboardPage: React.FC = () => {
   });
 
   const orders = inProgressData?.orders ?? [];
+  const aggregate = inProgressData?.aggregate;
+  const aggregateMaterials = aggregate?.materials ?? [];
+  const shortfallCount = aggregateMaterials.filter((m) => m.missing > 0).length;
 
   return (
     <div className="space-y-8">
@@ -97,6 +102,67 @@ export const DashboardPage: React.FC = () => {
           <p className="text-xs text-slate-500 mt-1">Retainer bags updated</p>
         </div>
       </div>
+
+      {/* Profit per Order Isle */}
+      {orders.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+            <div className="min-w-40">
+              <h3 className="font-semibold text-slate-900 text-sm flex items-center gap-1.5">
+                <TrendingUp className="w-4 h-4 text-emerald-600" />
+                Profit per Order
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Revenue (after discount) vs current material prices.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 flex-1">
+              {orders.map((o) => (
+                <span
+                  key={o.id}
+                  className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs"
+                  title={o.clientName}
+                >
+                  <span className="font-mono font-bold text-slate-700">
+                    {o.orderCode}
+                  </span>
+                  <span
+                    className={`font-bold ${
+                      o.financials.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                    }`}
+                  >
+                    {o.financials.profit >= 0 ? '+' : ''}
+                    {formatGil(o.financials.profit)}
+                  </span>
+                </span>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-4 lg:border-l lg:border-slate-200 lg:pl-5">
+              <div className="text-right">
+                <p className="text-[10px] uppercase tracking-wide text-slate-400">
+                  All In-Progress
+                </p>
+                <p className="text-[11px] font-mono text-slate-500">
+                  Sale {formatGil(aggregate?.revenue ?? 0)} · Cost{' '}
+                  {formatGil(aggregate?.materialCost ?? 0)}
+                </p>
+              </div>
+              <span
+                className={`text-sm font-bold px-3 py-1.5 rounded-lg border ${
+                  (aggregate?.profit ?? 0) >= 0
+                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                    : 'text-rose-700 bg-rose-50 border-rose-200'
+                }`}
+              >
+                {(aggregate?.profit ?? 0) >= 0 ? '+' : ''}
+                {formatGil(aggregate?.profit ?? 0)}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Live In-Progress Fabrication Section */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-6">
@@ -169,6 +235,16 @@ export const DashboardPage: React.FC = () => {
                       <p className="text-[10px] text-slate-400">
                         {totalCrafted} / {totalOrdered} parts
                       </p>
+                      <span
+                        className={`text-[11px] font-bold ${
+                          order.financials.profit >= 0
+                            ? 'text-emerald-600'
+                            : 'text-rose-600'
+                        }`}
+                      >
+                        {order.financials.profit >= 0 ? '+' : ''}
+                        {formatGil(order.financials.profit)}
+                      </span>
                     </div>
                   </div>
 
@@ -276,6 +352,74 @@ export const DashboardPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Combined Material Requirements Across All In-Progress Orders */}
+      {orders.length > 0 && aggregateMaterials.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-slate-900 text-sm flex items-center gap-2">
+                <Boxes className="w-4 h-4 text-amber-600" />
+                Materials Required — All In-Progress Orders
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Everything the active builds need combined, checked against current
+                stock — not just what a single order is short of.
+              </p>
+            </div>
+            {shortfallCount > 0 ? (
+              <span className="text-xs px-2.5 py-1 rounded bg-amber-50 border border-amber-200 text-amber-700 font-bold">
+                {shortfallCount} material{shortfallCount === 1 ? '' : 's'} short
+              </span>
+            ) : (
+              <span className="text-xs px-2.5 py-1 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                All covered
+              </span>
+            )}
+          </div>
+
+          <div className="divide-y divide-slate-100">
+            {aggregateMaterials.map((mat) => (
+              <div
+                key={`${mat.materialId}-${mat.isPart}`}
+                className={`py-3 flex items-center justify-between gap-3 text-xs ${
+                  mat.missing > 0 ? '' : 'opacity-70'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 min-w-0">
+                  {mat.isPart ? (
+                    <Hammer className="w-3 h-3 text-amber-600 flex-shrink-0" />
+                  ) : (
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400 flex-shrink-0" />
+                  )}
+                  <span className="font-medium text-slate-800 truncate">
+                    {mat.name}
+                  </span>
+                  {mat.isPart && (
+                    <span className="text-[10px] text-slate-400">(part)</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <span className="text-slate-500 font-mono">
+                    need <strong className="text-slate-800">{formatNumber(mat.needed)}</strong>
+                    {' · '}have <strong className="text-slate-800">{formatNumber(mat.available)}</strong>
+                  </span>
+                  {mat.missing > 0 ? (
+                    <span className="font-mono px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-bold">
+                      Missing: -{formatNumber(mat.missing)}
+                    </span>
+                  ) : (
+                    <span className="font-mono px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold">
+                      Covered
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Lower Row: Missing Materials Quick List */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">

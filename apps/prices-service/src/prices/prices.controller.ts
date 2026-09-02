@@ -3,6 +3,8 @@
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Post,
   Put,
@@ -13,6 +15,8 @@ import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { PricesService } from './prices.service';
 import { UpdatePriceDto } from './dto/update-price.dto';
 import { UpdateWorldDto } from './dto/update-world.dto';
+import { CreatePartSetDto } from './dto/create-set.dto';
+import { UpdatePartSetDto } from './dto/update-set.dto';
 
 @Controller('prices')
 export class PricesController {
@@ -50,6 +54,32 @@ export class PricesController {
   @Put('settings/world')
   updateUniversalisWorld(@Body() dto: UpdateWorldDto) {
     return this.svc.updateUniversalisWorld(dto);
+  }
+
+  // ── Part sets (persistent profitability bundles, live-priced) ──────────
+
+  /** All saved sets with computed sale/cost/profit at current prices */
+  @Get('sets')
+  findSets() {
+    return this.svc.findSets();
+  }
+
+  /** Create a set, e.g. a full shark build (hull + stern + bow + bridge) */
+  @Post('sets')
+  @HttpCode(HttpStatus.CREATED)
+  createSet(@Body() dto: CreatePartSetDto) {
+    return this.svc.createSet(dto);
+  }
+
+  @Put('sets/:id')
+  updateSet(@Param('id') id: string, @Body() dto: UpdatePartSetDto) {
+    return this.svc.updateSet(id, dto);
+  }
+
+  @Delete('sets/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteSet(@Param('id') id: string) {
+    return this.svc.deleteSet(id);
   }
 
   @Get(':id')
