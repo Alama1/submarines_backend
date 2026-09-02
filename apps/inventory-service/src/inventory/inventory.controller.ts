@@ -60,6 +60,12 @@ export class InventoryController {
     return this.svc.findRepairs(search, p, l);
   }
 
+  /** All claims across every material (claims overview window) — must be declared before :id */
+  @Get('claims')
+  findAllClaims() {
+    return this.svc.findAllClaims();
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.svc.findOne(id);

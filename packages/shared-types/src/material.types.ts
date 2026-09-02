@@ -59,6 +59,20 @@ export interface MaterialClaim {
   createdAt: string;
 }
 
+/** Claim with material context, returned by GET /inventory/claims */
+export interface MaterialClaimOverview extends MaterialClaim {
+  materialName: string;
+  currentStock: number;
+  desiredQuantity: number;
+  deficit: number;
+}
+
+/** Response of GET /inventory/claims — every claim across all materials */
+export interface AllClaimsResponse {
+  items: MaterialClaimOverview[];
+  total: number;
+}
+
 export interface CreateMaterialClaimDto {
   claimedFor: string;
   quantity: number;

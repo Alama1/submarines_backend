@@ -16,7 +16,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
-import { MaterialClaimsResponse } from '@ff14/types';
+import { MaterialClaimsResponse, AllClaimsResponse, MaterialClaimOverview } from '@ff14/types';
 import { SubmarinePart } from '@ff14/types';
 
 /**
@@ -63,6 +63,141 @@ const BlurInput: React.FC<{
 const inlineInputClass =
   'w-20 px-2 py-1 bg-white border border-slate-300 rounded text-xs text-slate-900 font-mono focus:outline-none focus:border-emerald-500';
 
+/** Overview of every active claim, grouped by person, with quick cancel */
+const ClaimsOverview: React.FC = () => {
+  const queryClient = useQueryClient();
+  const [expanded, setExpanded] = useState(true);
+
+  const { data, isLoading } = useQuery<AllClaimsResponse>({
+    queryKey: ['claims-all'],
+    queryFn: async () => (await api.get('/inventory/claims')).data,
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: (claimId: string) => api.delete(`/inventory/claims/${claimId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['claims-all'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.message || 'Failed to remove claim.');
+    },
+  });
+
+  const claims = data?.items ?? [];
+  const totalQty = claims.reduce((sum, c) => sum + c.quantity, 0);
+
+  // Group claims by the person who pledged them so delivered batches
+  // can be cleared person by person
+  const byPerson = new Map<string, MaterialClaimOverview[]>();
+  for (const claim of claims) {
+    const list = byPerson.get(claim.claimedFor) ?? [];
+    list.push(claim);
+    byPerson.set(claim.claimedFor, list);
+  }
+  const groups = [...byPerson.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-cyan-50 border border-cyan-200 flex items-center justify-center text-cyan-600">
+            <Users className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-slate-900 text-sm">Material Claims</h3>
+            <p className="text-xs text-slate-500">
+              Everything currently pledged by your crafters — cancel claims here once
+              they are fulfilled.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {claims.length > 0 && (
+            <span className="text-xs px-2.5 py-1 rounded bg-cyan-50 border border-cyan-200 text-cyan-700 font-bold">
+              {claims.length} claim{claims.length === 1 ? '' : 's'} ·{' '}
+              {formatNumber(totalQty)} items
+            </span>
+          )}
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="p-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition"
+            title={expanded ? 'Collapse' : 'Expand'}
+          >
+            {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+        </div>
+      </div>
+
+      {expanded && (
+        isLoading ? (
+          <div className="text-center py-6 text-xs text-slate-400">Loading claims...</div>
+        ) : groups.length === 0 ? (
+          <div className="text-center py-6 text-xs text-slate-400">
+            No active claims right now.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {groups.map(([person, personClaims]) => {
+              const personTotal = personClaims.reduce((sum, c) => sum + c.quantity, 0);
+              return (
+                <div
+                  key={person}
+                  className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <UserPlus className="w-3.5 h-3.5 text-cyan-600" />
+                      {person}
+                    </span>
+                    <span className="font-mono text-[11px] font-bold text-cyan-700 bg-white border border-slate-200 rounded px-2 py-0.5">
+                      {formatNumber(personTotal)} items
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    {personClaims.map((claim) => (
+                      <div
+                        key={claim.id}
+                        className="flex items-center justify-between gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-xs font-medium text-slate-700 truncate">
+                            {claim.materialName}
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            Claimed {new Date(claim.createdAt).toLocaleDateString()}
+                            {claim.deficit > 0 &&
+                              ` · still ${formatNumber(claim.deficit)} short`}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="font-mono text-xs font-bold text-cyan-600 bg-slate-50 border border-slate-200 rounded px-2 py-0.5">
+                            {formatNumber(claim.quantity)}
+                          </span>
+                          <button
+                            onClick={() => cancelMutation.mutate(claim.id)}
+                            disabled={cancelMutation.isPending}
+                            className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition disabled:opacity-50"
+                            title="Cancel claim (fulfilled)"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
+      )}
+    </div>
+  );
+};
+
 interface ClaimsModalProps {
   materialId: string;
   materialName: string;
@@ -85,6 +220,7 @@ const ClaimsModal: React.FC<ClaimsModalProps> = ({ materialId, materialName, onC
       api.post(`/inventory/${materialId}/claims`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['claims', materialId] });
+      queryClient.invalidateQueries({ queryKey: ['claims-all'] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       setPerson('');
       setQuantity('');
@@ -98,6 +234,7 @@ const ClaimsModal: React.FC<ClaimsModalProps> = ({ materialId, materialName, onC
     mutationFn: (claimId: string) => api.delete(`/inventory/claims/${claimId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['claims', materialId] });
+      queryClient.invalidateQueries({ queryKey: ['claims-all'] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
     },
     onError: (err: any) => {
@@ -380,6 +517,9 @@ export const InventoryPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* ── Material Claims overview (cancel fulfilled claims) ── */}
+      <ClaimsOverview />
 
       {/* ── Submarine Crafting Goals & Fleet Target Planner ── */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">

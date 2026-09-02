@@ -40,6 +40,14 @@ export interface MaterialClaimSummary {
   createdAt: Date;
 }
 
+/** Claim with the material context, used by the "all claims" overview */
+export interface ClaimWithMaterial extends MaterialClaimSummary {
+  materialName: string;
+  currentStock: number;
+  desiredQuantity: number;
+  deficit: number;
+}
+
 export interface MissingMaterialItem extends InventoryItemStock {
   /** Sum of all claim quantities against this material */
   claimed: number;
@@ -198,6 +206,31 @@ export class InventoryService {
   }
 
   // ── Claims ──────────────────────────────────────────────────────────────
+
+  /** All claims across every material, newest first, with material context */
+  async findAllClaims(): Promise<{ items: ClaimWithMaterial[]; total: number }> {
+    const claims = await this.claimRepo.find({
+      relations: ['material'],
+      order: { createdAt: 'DESC' },
+    });
+
+    const items = claims.map((c) => {
+      const mat = c.material;
+      return {
+        id: c.id,
+        materialId: c.materialId,
+        claimedFor: c.claimedFor,
+        quantity: c.quantity,
+        createdAt: c.createdAt,
+        materialName: mat?.name ?? 'Unknown material',
+        currentStock: mat?.currentStock ?? 0,
+        desiredQuantity: mat?.desiredQuantity ?? 0,
+        deficit: mat ? Math.max(0, mat.desiredQuantity - mat.currentStock) : 0,
+      };
+    });
+
+    return { items, total: items.length };
+  }
 
   /** Lists all claims for a material together with a deficit summary */
   async findClaims(materialId: string): Promise<{
