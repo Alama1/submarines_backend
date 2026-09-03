@@ -135,8 +135,7 @@ export class InventoryService {
       // base_materials. Clients can't craft or deliver parts — the missing
       // list is for raw materials only
       .leftJoin(SubmarinePart, 'p', 'LOWER(p.name) = LOWER(m.name)')
-      .where('m.current_stock < m.desired_quantity')
-      .andWhere('m.category != :repair', { repair: MaterialCategory.REPAIR })
+      .where('m.category != :repair', { repair: MaterialCategory.REPAIR })
       .andWhere('p.id IS NULL');
     if (search) {
       qb.andWhere('LOWER(m.name) LIKE :search', {

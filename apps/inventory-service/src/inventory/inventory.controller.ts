@@ -36,7 +36,7 @@ export class InventoryController {
     return this.svc.findAll(search, p, l);
   }
 
-  /** Materials where currentStock < desiredQuantity */
+  /** All materials with claim info; fully stocked items report deficit 0 */
   @Get('missing')
   findMissing(
     @Query('search') search?: string,
