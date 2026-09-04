@@ -136,6 +136,8 @@ export class InventoryService {
       // list is for raw materials only
       .leftJoin(SubmarinePart, 'p', 'LOWER(p.name) = LOWER(m.name)')
       .where('m.category != :repair', { repair: MaterialCategory.REPAIR })
+      // Materials without a stock target aren't "missing" anything — hide them
+      .andWhere('m.desiredQuantity > 0')
       .andWhere('p.id IS NULL');
     if (search) {
       qb.andWhere('LOWER(m.name) LIKE :search', {

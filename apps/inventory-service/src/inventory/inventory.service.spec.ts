@@ -138,6 +138,16 @@ describe('InventoryService — claims', () => {
       );
       expect(qb.andWhere).toHaveBeenCalledWith('p.id IS NULL');
     });
+
+    it('excludes materials with a zero desired quantity', async () => {
+      const qb = makeQb([[], 0]);
+      matRepo.createQueryBuilder.mockReturnValue(qb);
+      claimRepo.find.mockResolvedValue([]);
+
+      await svc.findMissing(undefined, 1, 50);
+
+      expect(qb.andWhere).toHaveBeenCalledWith('m.desiredQuantity > 0');
+    });
   });
 
   describe('createClaim', () => {

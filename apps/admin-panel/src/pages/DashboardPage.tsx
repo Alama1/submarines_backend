@@ -43,6 +43,32 @@ export const DashboardPage: React.FC = () => {
   const aggregateMaterials = aggregate?.materials ?? [];
   const shortfallCount = aggregateMaterials.filter((m) => m.missing > 0).length;
 
+  // Total parts to craft across all in-progress builds, sorted by name.
+  // Stock is per part (shared across builds), so to-craft = ordered - stock.
+  const partTotals = React.useMemo(() => {
+    const byName = new Map<
+      string,
+      { name: string; partType: string | null; ordered: number; stock: number }
+    >();
+    for (const order of orders) {
+      for (const item of order.items) {
+        const entry = byName.get(item.partName) ?? {
+          name: item.partName,
+          partType: item.partType,
+          ordered: 0,
+          stock: item.stock,
+        };
+        entry.ordered += item.quantity;
+        entry.stock = Math.max(entry.stock, item.stock);
+        byName.set(item.partName, entry);
+      }
+    }
+    return [...byName.values()]
+      .map((p) => ({ ...p, toCraft: Math.max(0, p.ordered - p.stock) }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [orders]);
+  const totalToCraft = partTotals.reduce((sum, p) => sum + p.toCraft, 0);
+
   return (
     <div className="space-y-8">
       {/* Top Welcome & KPI cards */}
@@ -352,6 +378,78 @@ export const DashboardPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Total Parts Isle: every part the in-progress builds need crafted */}
+      {orders.length > 0 && partTotals.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-slate-900 text-sm flex items-center gap-2">
+                <Hammer className="w-4 h-4 text-cyan-600" />
+                Total Parts — All In-Progress Builds
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Every submarine part the active builds require, combined into one
+                crafting list.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {totalToCraft > 0 ? (
+                <span className="text-xs px-2.5 py-1 rounded bg-cyan-50 border border-cyan-200 text-cyan-700 font-bold">
+                  {totalToCraft} part{totalToCraft === 1 ? '' : 's'} to craft
+                </span>
+              ) : (
+                <span className="text-xs px-2.5 py-1 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  All crafted
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="divide-y divide-slate-100">
+            {partTotals.map((p) => (
+              <div
+                key={p.name}
+                className={`py-3 flex items-center justify-between gap-3 text-xs ${
+                  p.toCraft > 0 ? '' : 'opacity-70'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 min-w-0">
+                  {p.toCraft > 0 ? (
+                    <Hammer className="w-3 h-3 text-cyan-600 flex-shrink-0" />
+                  ) : (
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+                  )}
+                  <span className="font-medium text-slate-800 truncate">
+                    {p.name}
+                  </span>
+                  {p.partType && (
+                    <span className="text-[10px] text-slate-400 uppercase">
+                      ({p.partType})
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <span className="text-slate-500 font-mono">
+                    need <strong className="text-slate-800">{formatNumber(p.ordered)}</strong>
+                    {' · '}have <strong className="text-slate-800">{formatNumber(p.stock)}</strong>
+                  </span>
+                  {p.toCraft > 0 ? (
+                    <span className="font-mono px-2 py-0.5 rounded bg-cyan-50 border border-cyan-200 text-cyan-700 font-bold">
+                      Craft: {formatNumber(p.toCraft)}
+                    </span>
+                  ) : (
+                    <span className="font-mono px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold">
+                      Covered
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Combined Material Requirements Across All In-Progress Orders */}
       {orders.length > 0 && aggregateMaterials.length > 0 && (
