@@ -80,11 +80,12 @@ export interface InProgressOrderFeedItem {
   financials: OrderFinancials;
 }
 
-/** Revenue vs material cost for an order (materials valued at effective prices) */
+/** Revenue vs material cost for an order (materials valued at effective prices).
+ * Repair kits and other product rows are excluded entirely from both sides. */
 export interface OrderFinancials {
-  /** Order total after discount */
+  /** Revenue of the craftable parts in the order, after the order discount */
   revenue: number;
-  /** Cost of raw materials to craft every part in the order */
+  /** Cost of raw materials to craft the craftable parts in the order */
   materialCost: number;
   /** revenue - materialCost */
   profit: number;
@@ -109,8 +110,6 @@ export interface InProgressMaterialRequirement {
   available: number;
   /** needed - available (never below 0) */
   missing: number;
-  /** True for part-as-material requirements (e.g. modified parts needing their base part) */
-  isPart: boolean;
 }
 
 export interface MissingMaterial {
@@ -119,10 +118,8 @@ export interface MissingMaterial {
   itemId: number | null;
   /** Total units required to craft the parts still missing for this order */
   needed: number;
-  /** Units still unclaimed by earlier in-progress orders (or covered by part stock) */
+  /** Units still unclaimed by earlier in-progress orders */
   available: number;
   /** needed - available (never below 0) */
   missing: number;
-  /** True for part-as-material requirements (e.g. modified parts needing their base part) */
-  isPart: boolean;
 }

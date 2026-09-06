@@ -80,12 +80,11 @@ describe('OrdersService — computeMissingMaterials', () => {
       needed: 10,
       available: 4,
       missing: 6,
-      isPart: false,
     });
   });
 
-  it('reports part-as-material requirements and subtracts nested part stock from raw needs', () => {
-    const iron = mat('iron', 'Iron Ore', 50);
+  it('fully resolves part-as-material rows into raw needs minus nested part stock', () => {
+    const iron = mat('iron', 'Iron Ore', 3);
     const cobalt = mat('cobalt', 'Cobalt Ore', 20);
     const baseHull = part('shark_hull', 'Shark Hull', 1, [
       { material: iron, quantity: 5 },
@@ -100,22 +99,19 @@ describe('OrdersService — computeMissingMaterials', () => {
       modHull,
     ]);
 
-    const partEntry = missing.find((m: any) => m.materialId === baseHull.id);
-    expect(partEntry).toMatchObject({
-      name: 'Shark Hull',
-      needed: 2,
-      available: 1,
-      missing: 1,
-      isPart: true,
-    });
-
-    const ironEntry = missing.find((m: any) => m.materialId === 'iron');
-    expect(ironEntry).toBeUndefined();
-
-    const cobaltEntry = missing.find((m: any) => m.materialId === 'cobalt');
-    expect(cobaltEntry).toBeUndefined();
-
+    // No intermediate part entries — only raw materials, and only for the
+    // units not already covered by the 1 Shark Hull in stock:
+    // iron needed = (2 hulls required - 1 covered) * 5 = 5 -> missing 2.
     expect(missing).toHaveLength(1);
+    expect(missing[0]).toMatchObject({
+      materialId: 'iron',
+      name: 'Iron Ore',
+      needed: 5,
+      available: 3,
+      missing: 2,
+    });
+    expect(missing.find((m: any) => m.materialId === baseHull.id)).toBeUndefined();
+    expect(missing.find((m: any) => m.materialId === 'cobalt')).toBeUndefined();
   });
 
   it('returns empty when all parts are already in stock', () => {
@@ -214,7 +210,6 @@ describe('OrdersService — computeAggregate', () => {
       needed: 20,
       available: 15,
       missing: 5,
-      isPart: false,
     });
   });
 
@@ -234,13 +229,8 @@ describe('OrdersService — computeAggregate', () => {
       [baseHull, modHull],
     );
 
-    const partEntry = agg.materials.find((m: any) => m.materialId === 'shark_hull');
-    expect(partEntry).toMatchObject({
-      needed: 2,
-      available: 1,
-      missing: 1,
-      isPart: true,
-    });
+    // Part-as-material rows are resolved — no intermediate part entries.
+    expect(agg.materials.find((m: any) => m.materialId === 'shark_hull')).toBeUndefined();
 
     const ironEntry = agg.materials.find((m: any) => m.materialId === 'iron');
     expect(ironEntry).toMatchObject({ needed: 5, available: 5, missing: 0 });

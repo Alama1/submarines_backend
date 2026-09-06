@@ -340,11 +340,7 @@ export const DashboardPage: React.FC = () => {
                               className="flex items-center justify-between gap-2 text-xs"
                             >
                               <span className="text-slate-700 font-medium flex items-center gap-1.5 min-w-0">
-                                {mat.isPart ? (
-                                  <Hammer className="w-3 h-3 text-amber-600 flex-shrink-0" />
-                                ) : (
-                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0"></span>
-                                )}
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0"></span>
                                 <span className="truncate">{mat.name}</span>
                               </span>
                               <span className="font-mono text-[11px] whitespace-nowrap">
@@ -480,23 +476,16 @@ export const DashboardPage: React.FC = () => {
           <div className="divide-y divide-slate-100">
             {aggregateMaterials.map((mat) => (
               <div
-                key={`${mat.materialId}-${mat.isPart}`}
+                key={mat.materialId}
                 className={`py-3 flex items-center justify-between gap-3 text-xs ${
                   mat.missing > 0 ? '' : 'opacity-70'
                 }`}
               >
                 <div className="flex items-center gap-1.5 min-w-0">
-                  {mat.isPart ? (
-                    <Hammer className="w-3 h-3 text-amber-600 flex-shrink-0" />
-                  ) : (
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400 flex-shrink-0" />
-                  )}
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400 flex-shrink-0" />
                   <span className="font-medium text-slate-800 truncate">
                     {mat.name}
                   </span>
-                  {mat.isPart && (
-                    <span className="text-[10px] text-slate-400">(part)</span>
-                  )}
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <span className="text-slate-500 font-mono">

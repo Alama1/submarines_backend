@@ -22,8 +22,9 @@ import { UpdateOrderNotesDto } from './dto/update-notes.dto';
 
 @Injectable()
 export class OrdersService {
-  /** Only these part types count toward bulk-discount tiers; product rows like repair kits (partType 'Materials') do not */
-  private static readonly DISCOUNTABLE_PART_TYPES = new Set(['bow', 'bridge', 'hull', 'stern']);
+  /** Only these craftable part types count toward bulk-discount tiers and order
+   * profitability; product rows like repair kits (partType 'Materials') do not */
+  private static readonly CRAFTABLE_PART_TYPES = new Set(['bow', 'bridge', 'hull', 'stern']);
 
   constructor(
     @InjectRepository(Order)
@@ -139,7 +140,6 @@ export class OrdersService {
         needed: number;
         available: number;
         missing: number;
-        isPart: boolean;
       }>;
       financials: {
         revenue: number;
@@ -158,7 +158,6 @@ export class OrdersService {
         needed: number;
         available: number;
         missing: number;
-        isPart: boolean;
       }>;
     };
   }> {
@@ -205,9 +204,20 @@ export class OrdersService {
 
     const mapped = orders.map((o) => {
       let materialCost = 0;
+      // Repair kits (product rows like 'Materials') never count toward profit:
+      // neither their sale revenue nor their crafting cost.
+      let partsRevenue = 0;
       const items = (o.items ?? []).map((item) => {
         const part = partsById.get(item.part?.id ?? '') ?? item.part;
-        if (part) materialCost += (costPerPart.get(part.id) ?? 0) * item.quantity;
+        const isCraftable =
+          !!part &&
+          OrdersService.CRAFTABLE_PART_TYPES.has(
+            (item.partType ?? part.partType ?? '').toLowerCase(),
+          );
+        if (part && isCraftable) {
+          materialCost += (costPerPart.get(part.id) ?? 0) * item.quantity;
+          partsRevenue += item.lineTotal;
+        }
         return {
           partId: item.part?.id ?? '',
           partName: item.partName,
@@ -219,6 +229,9 @@ export class OrdersService {
           lineTotal: item.lineTotal,
         };
       });
+      // Bulk discounts are earned by craftable parts only, so the whole
+      // discount is subtracted from the parts' revenue.
+      const revenue = Math.max(0, partsRevenue - o.discountAmt);
 
       return {
         id: o.id,
@@ -239,9 +252,9 @@ export class OrdersService {
           availableStock,
         ),
         financials: {
-          revenue: o.total,
+          revenue,
           materialCost,
-          profit: o.total - materialCost,
+          profit: revenue - materialCost,
         },
       };
     });
@@ -272,11 +285,15 @@ export class OrdersService {
   }
 
   /**
-   * Aggregates the raw material and part requirements of every in-progress
-   * order into a single shopping list, then reports the shortfall against
-   * current stock — so big simultaneous orders that together eat the whole
-   * stock are visible in one place (unlike the per-order lists, which
-   * allocate shared stock sequentially).
+   * Aggregates the raw material requirements of every in-progress order into a
+   * single shopping list, then reports the shortfall against current stock —
+   * so big simultaneous orders that together eat the whole stock are visible
+   * in one place (unlike the per-order lists, which allocate shared stock
+   * sequentially).
+   *
+   * Part-as-material rows (modified parts needing their base part) are fully
+   * resolved: only the raw materials for the units not already covered by
+   * nested part stock are listed.
    */
   private computeAggregate(
     orders: Order[],
@@ -292,7 +309,6 @@ export class OrdersService {
       needed: number;
       available: number;
       missing: number;
-      isPart: boolean;
     }>;
   } {
     // Units still to craft per part across all in-progress orders
@@ -345,23 +361,7 @@ export class OrdersService {
       needed: number;
       available: number;
       missing: number;
-      isPart: boolean;
     }> = [];
-
-    for (const [nestedId, needed] of partNeeds) {
-      const nested = partsById.get(nestedId);
-      if (!nested) continue;
-      const covered = coveredByPart.get(nestedId) ?? 0;
-      materials.push({
-        materialId: nested.id,
-        name: nested.name,
-        itemId: nested.itemId,
-        needed,
-        available: covered,
-        missing: needed - covered,
-        isPart: true,
-      });
-    }
 
     for (const [materialId, needed] of rawNeeds) {
       if (needed <= 0) continue;
@@ -374,15 +374,11 @@ export class OrdersService {
         needed,
         available: mat.currentStock,
         missing: Math.max(0, needed - mat.currentStock),
-        isPart: false,
       });
     }
 
     materials.sort(
-      (a, b) =>
-        Number(b.isPart) - Number(a.isPart) ||
-        b.missing - a.missing ||
-        a.name.localeCompare(b.name),
+      (a, b) => b.missing - a.missing || a.name.localeCompare(b.name),
     );
 
     return { materials };
@@ -392,12 +388,11 @@ export class OrdersService {
    * Computes what materials an in-progress order is still short of, using the
    * recipes (PartMaterial rows) of every part that still needs crafting.
    *
-   * Follows the same convention as RecipesService.recalculateMaterialTargets:
-   * part-as-material rows (modified parts requiring their base part) are listed
-   * directly with the nested part's stock as coverage, while raw materials come
-   * from the fully expanded recipe chain. Units covered by existing intermediate
-   * part stock are subtracted from the raw requirements so the shopping list
-   * stays accurate.
+   * Part-as-material rows (modified parts requiring their base part) are fully
+   * resolved into raw base materials: the order needs the units still missing
+   * after the nested part's stock, so only those uncovered units contribute
+   * raw requirements. The result is a flat raw-material shopping list — no
+   * intermediate parts are listed.
    */
   private computeMissingMaterials(
     order: Order,
@@ -413,12 +408,11 @@ export class OrdersService {
     needed: number;
     available: number;
     missing: number;
-    isPart: boolean;
   }> {
     const rawNeeds = new Map<string, { mat: BaseMaterial; needed: number }>();
     const partNeeds = new Map<
       string,
-      { mat: BaseMaterial; part: SubmarinePart; needed: number }
+      { part: SubmarinePart; needed: number }
     >();
 
     const addRaw = (mat: BaseMaterial, qty: number) => {
@@ -442,13 +436,12 @@ export class OrdersService {
         if (!pm.material) continue;
         const nested = partsByName.get(pm.material.name.toLowerCase());
         if (!nested || nested.id === part.id) continue;
-        const entry = partNeeds.get(pm.material.id) ?? {
-          mat: pm.material,
+        const entry = partNeeds.get(nested.id) ?? {
           part: nested,
           needed: 0,
         };
         entry.needed += toCraft * pm.quantity;
-        partNeeds.set(pm.material.id, entry);
+        partNeeds.set(nested.id, entry);
       }
     }
 
@@ -459,22 +452,12 @@ export class OrdersService {
       needed: number;
       available: number;
       missing: number;
-      isPart: boolean;
     }> = [];
 
-    for (const { mat, part: nested, needed } of partNeeds.values()) {
+    // Nested part stock covers part-as-material needs; the raw requirements
+    // of the covered units are already crafted and get subtracted.
+    for (const { part: nested, needed } of partNeeds.values()) {
       const covered = Math.min(needed, nested.stock);
-      if (needed - covered > 0) {
-        missing.push({
-          materialId: mat.id,
-          name: mat.name,
-          itemId: mat.itemId,
-          needed,
-          available: covered,
-          missing: needed - covered,
-          isPart: true,
-        });
-      }
       if (covered > 0) {
         for (const req of expanded.get(nested.id) ?? []) {
           const rawMat = matById.get(req.materialId);
@@ -495,14 +478,11 @@ export class OrdersService {
           needed,
           available: used,
           missing: needed - used,
-          isPart: false,
         });
       }
     }
 
-    missing.sort(
-      (a, b) => Number(b.isPart) - Number(a.isPart) || b.missing - a.missing,
-    );
+    missing.sort((a, b) => b.missing - a.missing);
     return missing;
   }
 
@@ -577,7 +557,7 @@ export class OrdersService {
     const totalPartsCount = preparedItems.reduce(
       (acc, i) =>
         acc +
-        (OrdersService.DISCOUNTABLE_PART_TYPES.has(i.part.partType.toLowerCase())
+          (OrdersService.CRAFTABLE_PART_TYPES.has(i.part.partType.toLowerCase())
           ? i.quantity
           : 0),
       0,
