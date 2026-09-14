@@ -28,10 +28,15 @@ export const PricesPage: React.FC = () => {
 
   const updatePriceMutation = useMutation({
     mutationFn: ({ id, price }: { id: string; price: number | null }) =>
-      api.put(`/prices/${id}/my-price`, { price }),
+      price === null
+        ? api.delete(`/prices/${id}/my-price`)
+        : api.put(`/prices/${id}/my-price`, { myPrice: price }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['prices'] });
       setEditingId(null);
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.message || 'Failed to save manual price override.');
     },
   });
 

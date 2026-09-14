@@ -22,7 +22,7 @@ export const DashboardPage: React.FC = () => {
     aggregate: InProgressAggregate;
   }>({
     queryKey: ['in-progress-orders'],
-    queryFn: async () => (await api.get('/orders/in-progress')).data,
+    queryFn: async () => (await api.get('/orders/admin/in-progress')).data,
     refetchInterval: 10000,
   });
 

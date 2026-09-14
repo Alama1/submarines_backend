@@ -17,6 +17,7 @@ import {
   SubmarinePart,
 } from '@ff14/entities';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { UpdateOrderDto } from './dto/update-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-status.dto';
 import { UpdateOrderNotesDto } from './dto/update-notes.dto';
 
@@ -25,6 +26,9 @@ export class OrdersService {
   /** Only these craftable part types count toward bulk-discount tiers and order
    * profitability; product rows like repair kits (partType 'Materials') do not */
   private static readonly CRAFTABLE_PART_TYPES = new Set(['bow', 'bridge', 'hull', 'stern']);
+
+  /** Orders that may still be edited: confirmed and in production */
+  private static readonly EDITABLE_STATUSES = new Set<OrderStatus>(['confirmed', 'in_progress']);
 
   constructor(
     @InjectRepository(Order)
@@ -113,7 +117,12 @@ export class OrdersService {
     return { items, total };
   }
 
-  async findInProgress(): Promise<{
+  /**
+   * In-progress orders feed. Client names are masked unless `unmask` is set —
+   * the unmasked variant is only exposed through the admin-only endpoint
+   * (protected by the gateway auth), the public customer site stays masked.
+   */
+  async findInProgress(unmask = false): Promise<{
     orders: Array<{
       id: string;
       orderCode: string;
@@ -236,7 +245,7 @@ export class OrdersService {
       return {
         id: o.id,
         orderCode: o.orderCode,
-        clientName: this.publicClientName(o),
+        clientName: unmask ? o.clientName : this.publicClientName(o),
         isAnonymous: o.isAnonymous,
         contactInfo: o.contactInfo,
         notes: o.notes,
@@ -495,7 +504,12 @@ export class OrdersService {
     return order;
   }
 
-  async findByCode(code: string): Promise<Order> {
+  /**
+   * Order lookup by confirmation code. The client name is masked unless
+   * `unmask` is set — the unmasked variant is only exposed through the
+   * admin-only endpoint (protected by the gateway auth).
+   */
+  async findByCode(code: string, unmask = false): Promise<Order> {
     const normalized = code.trim().toUpperCase();
     const order = await this.orderRepo
       .createQueryBuilder('o')
@@ -506,10 +520,34 @@ export class OrdersService {
 
     if (!order) throw new NotFoundException(`Order with code "${code}" not found`);
     // Public lookup — mask the client name so codes can't be used to harvest names
-    return {
-      ...order,
-      clientName: this.publicClientName(order),
-    };
+    return unmask ? order : { ...order, clientName: this.publicClientName(order) };
+  }
+
+  /**
+   * Order pricing shared by create and update: sums line totals into a
+   * subtotal, then applies the highest bulk-discount tier the total count of
+   * craftable parts qualifies for.
+   */
+  private computePricing(
+    preparedItems: Array<{ part: SubmarinePart; quantity: number; unitPrice: number }>,
+    discounts: BulkDiscount[],
+  ): { subtotal: number; discountPct: number; discountAmt: number; total: number } {
+    const subtotal = preparedItems.reduce(
+      (acc, i) => acc + i.unitPrice * i.quantity,
+      0,
+    );
+    const totalPartsCount = preparedItems.reduce(
+      (acc, i) =>
+        acc +
+          (OrdersService.CRAFTABLE_PART_TYPES.has(i.part.partType.toLowerCase())
+          ? i.quantity
+          : 0),
+      0,
+    );
+    const matchingTier = discounts.find((d) => totalPartsCount >= d.threshold);
+    const discountPct = matchingTier ? Number(matchingTier.discountPercent) : 0;
+    const discountAmt = Math.round(subtotal * (discountPct / 100));
+    return { subtotal, discountPct, discountAmt, total: subtotal - discountAmt };
   }
 
   async create(dto: CreateOrderDto): Promise<Order> {
@@ -529,47 +567,31 @@ export class OrdersService {
     }
 
     // 1. Calculate line totals and subtotal
-    let subtotal = 0;
     const preparedItems: Array<{
       part: SubmarinePart;
       quantity: number;
       buildName: string | null;
       unitPrice: number;
-      lineTotal: number;
     }> = [];
 
     for (const itemDto of dto.items) {
       const part = partMap.get(itemDto.partId)!;
-      const unitPrice = part.price;
-      const lineTotal = unitPrice * itemDto.quantity;
-      subtotal += lineTotal;
-
       preparedItems.push({
         part,
         quantity: itemDto.quantity,
         buildName: itemDto.buildName ?? null,
-        unitPrice,
-        lineTotal,
+        unitPrice: part.price,
       });
     }
 
     // 2. Fetch bulk discounts and apply the highest matching tier based on total parts quantity
-    const totalPartsCount = preparedItems.reduce(
-      (acc, i) =>
-        acc +
-          (OrdersService.CRAFTABLE_PART_TYPES.has(i.part.partType.toLowerCase())
-          ? i.quantity
-          : 0),
-      0,
-    );
     const discounts = await this.discountRepo.find({
       order: { threshold: 'DESC' },
     });
-    const matchingTier = discounts.find((d) => totalPartsCount >= d.threshold);
-
-    const discountPct = matchingTier ? Number(matchingTier.discountPercent) : 0;
-    const discountAmt = Math.round(subtotal * (discountPct / 100));
-    const total = subtotal - discountAmt;
+    const { subtotal, discountPct, discountAmt, total } = this.computePricing(
+      preparedItems,
+      discounts,
+    );
     const orderCode = await this.generateUniqueOrderCode();
 
     // 3. Save Order and OrderItems in a transaction with 'pending' status
@@ -598,7 +620,7 @@ export class OrdersService {
           partType: pi.part.partType,
           quantity: pi.quantity,
           unitPrice: pi.unitPrice,
-          lineTotal: pi.lineTotal,
+          lineTotal: pi.unitPrice * pi.quantity,
           buildName: pi.buildName,
         });
         await em.save(orderItem);
@@ -619,7 +641,8 @@ export class OrdersService {
    * the order to in_progress; admins manage further status changes manually.
    */
   async confirmByCode(code: string): Promise<Order> {
-    const order = await this.findByCode(code);
+    // Admin-only route — return the unmasked client name in the response
+    const order = await this.findByCode(code, true);
     return this.activateOrder(order);
   }
 
@@ -653,6 +676,86 @@ export class OrdersService {
     if (dto.notes !== undefined) order.notes = dto.notes;
     if (dto.fulfillmentDt !== undefined) order.fulfillmentDt = dto.fulfillmentDt;
     await this.orderRepo.save(order);
+    return this.findOne(id);
+  }
+
+  /**
+   * Admin edit for mistakes in orders: client details and/or the item list.
+   * Only active orders (confirmed / in_progress) can be edited. Replacement
+   * items are re-priced at the current part prices and the bulk discount is
+   * recalculated, exactly like on order creation.
+   */
+  async update(id: string, dto: UpdateOrderDto): Promise<Order> {
+    const order = await this.findOne(id);
+    if (!OrdersService.EDITABLE_STATUSES.has(order.status)) {
+      throw new BadRequestException(
+        `Order "${order.orderCode}" is "${order.status}" — only active orders (confirmed or in progress) can be edited`,
+      );
+    }
+
+    if (dto.clientName !== undefined) order.clientName = dto.clientName;
+    if (dto.isAnonymous !== undefined) order.isAnonymous = dto.isAnonymous;
+    if (dto.contactInfo !== undefined) order.contactInfo = dto.contactInfo;
+    if (dto.notes !== undefined) order.notes = dto.notes;
+    if (dto.fulfillmentDt !== undefined) order.fulfillmentDt = dto.fulfillmentDt;
+
+    if (dto.items !== undefined) {
+      if (!dto.items.length) {
+        throw new BadRequestException('Order must contain at least one item');
+      }
+
+      const partIds = [...new Set(dto.items.map((i) => i.partId))];
+      const parts = await this.partRepo.find({ where: { id: In(partIds) } });
+      const partMap = new Map<string, SubmarinePart>(parts.map((p) => [p.id, p]));
+      for (const itemDto of dto.items) {
+        if (!partMap.has(itemDto.partId)) {
+          throw new NotFoundException(`Submarine part "${itemDto.partId}" not found`);
+        }
+      }
+
+      const preparedItems = dto.items.map((itemDto) => {
+        const part = partMap.get(itemDto.partId)!;
+        return {
+          part,
+          quantity: itemDto.quantity,
+          buildName: itemDto.buildName ?? null,
+          unitPrice: part.price,
+        };
+      });
+      const discounts = await this.discountRepo.find({
+        order: { threshold: 'DESC' },
+      });
+      const pricing = this.computePricing(preparedItems, discounts);
+
+      await this.ds.transaction(async (em) => {
+        if (order.items?.length) {
+          await em.delete(
+            OrderItem,
+            order.items.map((i) => i.id),
+          );
+        }
+        order.items = preparedItems.map((pi) =>
+          em.create(OrderItem, {
+            order,
+            part: pi.part,
+            partName: pi.part.name,
+            partType: pi.part.partType,
+            quantity: pi.quantity,
+            unitPrice: pi.unitPrice,
+            lineTotal: pi.unitPrice * pi.quantity,
+            buildName: pi.buildName,
+          }),
+        );
+        order.subtotal = pricing.subtotal;
+        order.discountPct = pricing.discountPct;
+        order.discountAmt = pricing.discountAmt;
+        order.total = pricing.total;
+        await em.save(order);
+      });
+    } else {
+      await this.orderRepo.save(order);
+    }
+
     return this.findOne(id);
   }
 

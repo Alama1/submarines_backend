@@ -40,7 +40,7 @@ export const QuickConfirmModal: React.FC<QuickConfirmModalProps> = ({ onClose })
 
     const timer = setTimeout(async () => {
       try {
-        const res = await api.get(`/orders/lookup/${normalized}`);
+        const res = await api.get(`/orders/admin/lookup/${normalized}`);
         if (reqIdRef.current !== reqId) return;
         setPreview(res.data);
       } catch (err: any) {

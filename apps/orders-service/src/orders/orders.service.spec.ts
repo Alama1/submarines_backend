@@ -1,5 +1,8 @@
 import { OrdersService } from './orders.service';
 import {
+  BadRequestException,
+} from '@nestjs/common';
+import {
   BaseMaterial,
   expandAllPartMaterials,
   ExpandedMaterialRequirement,
@@ -248,5 +251,142 @@ describe('OrdersService — computeAggregate', () => {
     const agg = aggregate([order([{ part: hull, quantity: 3 }])], [hull]);
 
     expect(agg.materials).toEqual([]);
+  });
+});
+
+describe('OrdersService — computePricing', () => {
+  const svc = new OrdersService(
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+  );
+
+  const part = (id: string, partType: string): SubmarinePart =>
+    ({ id, partType }) as SubmarinePart;
+
+  const discounts = [
+    { threshold: 10, discountPercent: 15 },
+    { threshold: 4, discountPercent: 5 },
+  ] as any[];
+
+  it('sums line totals and applies the highest matching discount tier', () => {
+    const items = [
+      { part: part('h1', 'hull'), quantity: 4, unitPrice: 1000 },
+      { part: part('b1', 'bow'), quantity: 1, unitPrice: 500 },
+    ];
+
+    // Craftable count = 5 -> 15%-off tier (threshold 10) not met, 5% tier met
+    expect((svc as any).computePricing(items, discounts)).toEqual({
+      subtotal: 4500,
+      discountPct: 5,
+      discountAmt: 225,
+      total: 4275,
+    });
+  });
+
+  it('counts only craftable part types toward discount tiers', () => {
+    const items = [
+      { part: part('h1', 'hull'), quantity: 3, unitPrice: 1000 },
+      // Repair kits ('Materials') never count toward the tier
+      { part: part('kit', 'Materials'), quantity: 9, unitPrice: 100 },
+    ];
+
+    // Craftable count = 3 -> below every tier
+    expect((svc as any).computePricing(items, discounts)).toEqual({
+      subtotal: 3900,
+      discountPct: 0,
+      discountAmt: 0,
+      total: 3900,
+    });
+  });
+});
+
+describe('OrdersService — update', () => {
+  const part = (id: string, price: number): SubmarinePart =>
+    ({ id, name: id, partType: 'hull', price }) as SubmarinePart;
+
+  it('rejects editing orders that are not active', async () => {
+    const orderRepo = {
+      findOne: jest.fn().mockResolvedValue({ id: 'o1', orderCode: 'SUB-1', status: 'finished' }),
+    };
+    const svc = new OrdersService(orderRepo as any, {} as any, {} as any, {} as any);
+
+    await expect(svc.update('o1', { notes: 'x' })).rejects.toThrow(BadRequestException);
+    await expect(svc.update('o1', { notes: 'x' })).rejects.toThrow(/only active orders/i);
+  });
+
+  it('updates client details without touching items', async () => {
+    const order: any = {
+      id: 'o1',
+      orderCode: 'SUB-1',
+      status: 'confirmed',
+      clientName: 'Old Name',
+      notes: null,
+      items: [],
+    };
+    const orderRepo = {
+      findOne: jest.fn().mockResolvedValue(order),
+      save: jest.fn().mockResolvedValue(order),
+    };
+    const svc = new OrdersService(orderRepo as any, {} as any, {} as any, {} as any);
+
+    const result = await svc.update('o1', { clientName: 'New Name', notes: 'fixed typo' });
+
+    expect(orderRepo.save).toHaveBeenCalledWith(order);
+    expect(result.clientName).toBe('New Name');
+    expect(result.notes).toBe('fixed typo');
+  });
+
+  it('replaces items and recalculates pricing for active orders', async () => {
+    const hull = part('shark_hull', 1000);
+    const order: any = {
+      id: 'o1',
+      orderCode: 'SUB-1',
+      status: 'in_progress',
+      subtotal: 3000,
+      discountPct: 0,
+      discountAmt: 0,
+      total: 3000,
+      items: [{ id: 7, quantity: 3 }],
+    };
+    const orderRepo = {
+      findOne: jest.fn().mockResolvedValue(order),
+      save: jest.fn(),
+    };
+    const partRepo = { find: jest.fn().mockResolvedValue([hull]) };
+    const discountRepo = { find: jest.fn().mockResolvedValue([]) };
+    const em = {
+      delete: jest.fn().mockResolvedValue({}),
+      create: jest.fn().mockImplementation((_cls: any, data: any) => data),
+      save: jest.fn().mockResolvedValue({}),
+    };
+    const ds = { transaction: jest.fn().mockImplementation((cb: any) => cb(em)) };
+    const svc = new OrdersService(orderRepo as any, partRepo as any, discountRepo as any, ds as any);
+
+    const result = await svc.update('o1', {
+      items: [{ partId: 'shark_hull', quantity: 2 }],
+    });
+
+    expect(em.delete).toHaveBeenCalledWith(OrderItem, [7]);
+    expect(order.subtotal).toBe(2000);
+    expect(order.total).toBe(2000);
+    expect(order.items).toHaveLength(1);
+    expect(order.items[0]).toMatchObject({
+      part: hull,
+      quantity: 2,
+      unitPrice: 1000,
+      lineTotal: 2000,
+    });
+    expect(result.total).toBe(2000);
+  });
+
+  it('rejects empty item lists and unknown parts', async () => {
+    const orderRepo = {
+      findOne: jest.fn().mockResolvedValue({ id: 'o1', orderCode: 'SUB-1', status: 'confirmed', items: [] }),
+    };
+    const svc = new OrdersService(orderRepo as any, {} as any, {} as any, {} as any);
+
+    await expect(svc.update('o1', { items: [] })).rejects.toThrow(BadRequestException);
   });
 });
