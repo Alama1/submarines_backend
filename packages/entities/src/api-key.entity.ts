@@ -7,11 +7,9 @@ import {
 
 @Entity('api_keys')
 export class ApiKey {
-  /** SHA-256 hex digest — the raw key is never stored */
   @PrimaryColumn()
   keyHash: string;
 
-  /** Human-readable label, e.g. "Firefox Extension — Home PC" */
   @Column({ type: 'text', nullable: true })
   label: string | null;
 

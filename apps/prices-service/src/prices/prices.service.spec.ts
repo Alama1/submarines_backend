@@ -9,6 +9,10 @@ import { UNIVERSALIS_WORLD_KEY } from '@ff14/types';
 import { PricesService } from './prices.service';
 
 describe('PricesService', () => {
+  beforeAll(() => {
+    process.env.INTERNAL_TOKEN = 'test-internal-token';
+  });
+
   let service: PricesService;
   let repo: any;
   let cache: any;
@@ -111,7 +115,10 @@ describe('PricesService', () => {
   it('should publish a refresh job to the price-worker queue', () => {
     const res = service.triggerRefresh();
     expect(res.status).toBe('queued');
-    expect(rmqClient.emit).toHaveBeenCalledWith('universalis_price_refresh', { force: true });
+    expect(rmqClient.emit).toHaveBeenCalledWith(
+      'universalis_price_refresh',
+      { token: 'test-internal-token', payload: { force: true } },
+    );
   });
 
   it('should clear myPrice and fall back to marketPrice', async () => {
@@ -206,7 +213,6 @@ describe('PricesService', () => {
 
       expect(res.total).toBe(1);
       const set = res.items[0];
-      // iron effective price 10 -> hull cost 50, stern cost 20
       expect(set.items[0]).toMatchObject({
         partId: 'shark_hull',
         unitSalePrice: 100,

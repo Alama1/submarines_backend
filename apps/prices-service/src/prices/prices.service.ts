@@ -10,6 +10,7 @@ import { DataSource, In, Repository } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { ClientProxy } from '@nestjs/microservices';
+import { createEnvelope } from '@ff14/internal-auth';
 import {
   AppSetting,
   BaseMaterial,
@@ -58,15 +59,11 @@ export class PricesService {
     private readonly config: ConfigService,
   ) {}
 
-  /** Publishes a manual Universalis price refresh job to the price-worker via RabbitMQ. */
   triggerRefresh(): { status: string } {
-    this.rmqClient.emit('universalis_price_refresh', { force: true });
+    this.rmqClient.emit('universalis_price_refresh', createEnvelope({ force: true }));
     return { status: 'queued' };
   }
 
-  // ── Universalis settings ────────────────────────────────────────────────
-
-  /** Returns the configured Universalis world (DB value -> env -> 'Louisoix') */
   async getUniversalisSettings(): Promise<UniversalisSettings> {
     const row = await this.settingRepo.findOne({
       where: { key: UNIVERSALIS_WORLD_KEY },
@@ -81,7 +78,6 @@ export class PricesService {
     };
   }
 
-  /** Persists the Universalis world used by the price-worker sync */
   async updateUniversalisWorld(dto: UpdateWorldDto): Promise<UniversalisSettings> {
     const world = dto.world.trim();
 
@@ -98,7 +94,6 @@ export class PricesService {
       });
     }
 
-    // Prices fetched for the old world are no longer representative
     await this.cache.reset();
 
     return { world, source: 'database' };
@@ -126,9 +121,6 @@ export class PricesService {
   ): Promise<{ items: MaterialPriceItem[]; total: number }> {
     const qb = this.repo
       .createQueryBuilder('m')
-      // Exclude "part-as-material" rows: submarine parts that also exist in
-      // base_materials (so recipes can reference them) must not appear in
-      // the market pricing list — they are crafted in-house, not market items
       .leftJoin(SubmarinePart, 'p', 'LOWER(p.name) = LOWER(m.name)')
       .where('p.id IS NULL');
     if (search) {
@@ -172,19 +164,11 @@ export class PricesService {
     return this.mapToPriceItem(saved);
   }
 
-  // ── Part sets (persistent profitability bundles) ────────────────────────
-
-  /** Effective valuation for a material: manual override > market > NPC */
   private effectivePriceOf(mat: BaseMaterial | null | undefined): number {
     if (!mat) return 0;
     return mat.myPrice ?? mat.marketPrice ?? mat.npcPrice ?? 0;
   }
 
-  /**
-   * Raw-material crafting cost for one unit of every part, using the fully
-   * expanded recipe chain and each material's effective price. Profit is
-   * always computed on read, so any price change reflects immediately.
-   */
   private buildSetCostContext(allParts: SubmarinePart[]): {
     costPerPart: Map<string, number>;
   } {

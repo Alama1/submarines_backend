@@ -1,10 +1,8 @@
-# Build context: monorepo root
-# Usage: docker build -f apps/api-gateway/Dockerfile .
 FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@11.24.0 --activate
 
 # Workspace manifests & base tsconfig
 COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
@@ -17,6 +15,7 @@ COPY apps/api-gateway/ ./apps/api-gateway/
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @ff14/types build
 RUN pnpm --filter @ff14/entities build
+RUN pnpm --filter @ff14/internal-auth build
 RUN pnpm --filter @ff14/api-gateway build
 
 # ── Production image ────────────────────────────────────────────
@@ -35,4 +34,6 @@ COPY --from=builder /app/apps/api-gateway/node_modules ./apps/api-gateway/node_m
 
 WORKDIR /app/apps/api-gateway
 EXPOSE 3000
+USER node
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD wget -q --spider http://127.0.0.1:3000/api/health || exit 1
 CMD ["node", "dist/main.js"]

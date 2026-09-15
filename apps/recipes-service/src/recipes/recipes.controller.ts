@@ -14,12 +14,12 @@ import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { RecipesService } from './recipes.service';
 import { CreatePartDto } from './dto/create-part.dto';
 import { UpdatePartDto } from './dto/update-part.dto';
+import { UpdateTargetDto } from './dto/update-target.dto';
 
 @Controller('recipes')
 export class RecipesController {
   constructor(private readonly svc: RecipesService) {}
 
-  /** Returns all submarine parts with their material requirements.  Cached for 24 h. */
   @Get()
   @UseInterceptors(CacheInterceptor)
   @CacheTTL(86_400)
@@ -27,7 +27,6 @@ export class RecipesController {
     return this.svc.findAll();
   }
 
-  /** Manually trigger recalculation of all raw material targets based on submarine part desiredStock */
   @Post('recalculate-targets')
   recalculateTargets() {
     return this.svc.recalculateMaterialTargets();
@@ -46,8 +45,8 @@ export class RecipesController {
   }
 
   @Put(':id/target')
-  updateTarget(@Param('id') id: string, @Body('desiredStock') desiredStock: number) {
-    return this.svc.updateTarget(id, desiredStock);
+  updateTarget(@Param('id') id: string, @Body() dto: UpdateTargetDto) {
+    return this.svc.updateTarget(id, dto.desiredStock);
   }
 
   @Put(':id')

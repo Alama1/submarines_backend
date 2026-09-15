@@ -46,6 +46,10 @@ export class ProxyService {
       headers['x-api-key-label'] = user.label;
     }
 
+    if (process.env.INTERNAL_TOKEN) {
+      headers['x-internal-token'] = process.env.INTERNAL_TOKEN;
+    }
+
     let body: string | undefined;
     if (method !== 'GET' && method !== 'HEAD' && req.body !== undefined) {
       body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
@@ -82,9 +86,7 @@ export class ProxyService {
       };
     } catch (err: unknown) {
       this.logger.error(`Failed to forward request to ${targetUrl}: ${(err as Error).message}`);
-      throw new BadGatewayException(
-        `Failed to connect to downstream service at ${targetBaseUrl}`,
-      );
+      throw new BadGatewayException('Upstream service is unavailable');
     }
   }
 }

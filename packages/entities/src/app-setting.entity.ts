@@ -1,6 +1,5 @@
 import { Column, Entity, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 
-/** Simple key/value store for runtime-editable application settings */
 @Entity('app_settings')
 export class AppSetting {
   @PrimaryColumn({ type: 'varchar' })

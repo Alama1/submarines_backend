@@ -1,10 +1,8 @@
-# Build context: monorepo root
-# Usage: docker build -f apps/inventory-worker/Dockerfile .
 FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@11.24.0 --activate
 
 # Workspace manifests & base tsconfig
 COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
@@ -17,6 +15,7 @@ COPY apps/inventory-worker/ ./apps/inventory-worker/
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @ff14/types build
 RUN pnpm --filter @ff14/entities build
+RUN pnpm --filter @ff14/internal-auth build
 RUN pnpm --filter @ff14/inventory-worker build
 
 # ── Production image ────────────────────────────────────────────
@@ -34,4 +33,5 @@ COPY --from=builder /app/apps/inventory-worker/dist ./apps/inventory-worker/dist
 COPY --from=builder /app/apps/inventory-worker/node_modules ./apps/inventory-worker/node_modules
 
 WORKDIR /app/apps/inventory-worker
+USER node
 CMD ["node", "dist/main.js"]

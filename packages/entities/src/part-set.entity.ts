@@ -8,10 +8,6 @@ import {
 } from 'typeorm';
 import { PartSetItem } from './part-set-item.entity';
 
-/**
- * A named, persistent bundle of submarine parts (e.g. "Full Shark Set")
- * used as a profitability indicator in price management.
- */
 @Entity('part_sets')
 export class PartSet {
   @PrimaryGeneratedColumn('uuid')

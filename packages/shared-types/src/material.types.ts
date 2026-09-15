@@ -50,7 +50,6 @@ export interface StockStatusResponse {
   missingCount: number;
 }
 
-/** A person's pledge to deliver a quantity of a missing material */
 export interface MaterialClaim {
   id: string;
   materialId: string;
@@ -59,7 +58,6 @@ export interface MaterialClaim {
   createdAt: string;
 }
 
-/** Claim with material context, returned by GET /inventory/claims */
 export interface MaterialClaimOverview extends MaterialClaim {
   materialName: string;
   currentStock: number;
@@ -67,7 +65,6 @@ export interface MaterialClaimOverview extends MaterialClaim {
   deficit: number;
 }
 
-/** Response of GET /inventory/claims — every claim across all materials */
 export interface AllClaimsResponse {
   items: MaterialClaimOverview[];
   total: number;
@@ -78,7 +75,6 @@ export interface CreateMaterialClaimDto {
   quantity: number;
 }
 
-/** Claims response for a single material */
 export interface MaterialClaimsResponse {
   material: Pick<BaseMaterial, 'id' | 'name' | 'currentStock' | 'desiredQuantity'>;
   deficit: number;
@@ -87,7 +83,6 @@ export interface MaterialClaimsResponse {
   claims: MaterialClaim[];
 }
 
-/** Item shape returned by GET /inventory/missing (includes claim info) */
 export interface MissingMaterialItem {
   id: string;
   name: string;
@@ -95,9 +90,7 @@ export interface MissingMaterialItem {
   currentStock: number;
   desiredQuantity: number;
   deficit: number;
-  /** Sum of all claim quantities against this material */
   claimed: number;
-  /** deficit - claimed (never below 0) */
   remaining: number;
   claims: MaterialClaim[];
   whereToBuy: MaterialSource;

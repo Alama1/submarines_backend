@@ -27,14 +27,6 @@ export class ProxyController {
     return result.body;
   }
 
-  // ── Swagger docs for downstream services (/api/docs/<service>) ────────
-  // The services serve their docs at /docs (no /api prefix). This section
-  // rewrites /api/docs/<svc>... so each service's full OpenAPI docs are
-  // reachable through the public gateway URL.
-  //
-  //   /api/docs/<svc>-json      -> <svc>/docs-json
-  //   /api/docs/<svc>/          -> <svc>/docs          (trailing slash required
-  //   /api/docs/<svc>/docs/*    -> <svc>/docs/*         so relative assets work)
   private resolveDocsService(service: string): string | null {
     switch (service) {
       case 'orders': return this.ordersUrl;
@@ -57,7 +49,6 @@ export class ProxyController {
     return this.forward(target, req, reply);
   }
 
-  /** /api/docs/<svc> or /api/docs/<svc>-json */
   @All('docs/:segment')
   proxyDocsIndex(
     @Req() req: ProxyIncomingRequest,
@@ -67,10 +58,6 @@ export class ProxyController {
     if (segment.endsWith('-json')) {
       return this.forwardDocs(req, reply, segment, '/docs-json');
     }
-    // Swagger UI page: redirect to index.html under the service subtree so
-    // the page's relative asset paths (./docs/...) resolve per service.
-    // (A trailing-slash route can't be used — Nest strips trailing slashes
-    // when registering, which collides with this route in Fastify.)
     if (req.method === 'GET' || req.method === 'HEAD') {
       reply.status(301);
       reply.header('location', `/api/docs/${segment}/index.html`);
@@ -80,7 +67,6 @@ export class ProxyController {
     return { statusCode: 404, message: 'Not found' };
   }
 
-  /** /api/docs/<svc>/* — the UI page via index.html + swagger static assets */
   @All('docs/:segment/*')
   proxyDocsAssets(
     @Req() req: ProxyIncomingRequest,
@@ -95,7 +81,6 @@ export class ProxyController {
     return this.forwardDocs(req, reply, segment, suffix || '/docs');
   }
 
-  // ── Recipes Service (/api/materials, /api/recipes) ────────────
   @All('materials')
   proxyMaterialsRoot(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
     return this.forward(this.recipesUrl, req, reply);
@@ -126,7 +111,6 @@ export class ProxyController {
     return this.forward(this.recipesUrl, req, reply);
   }
 
-  // ── Prices Service (/api/prices) ──────────────────────────────
   @All('prices')
   proxyPricesRoot(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
     return this.forward(this.pricesUrl, req, reply);
@@ -137,7 +121,6 @@ export class ProxyController {
     return this.forward(this.pricesUrl, req, reply);
   }
 
-  // ── Inventory Service (/api/inventory) ────────────────────────
   @All('inventory')
   proxyInventoryRoot(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
     return this.forward(this.inventoryUrl, req, reply);
@@ -148,7 +131,6 @@ export class ProxyController {
     return this.forward(this.inventoryUrl, req, reply);
   }
 
-  // ── Orders Service (/api/orders, /api/discounts) ──────────────
   @All('orders')
   proxyOrdersRoot(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
     return this.forward(this.ordersUrl, req, reply);

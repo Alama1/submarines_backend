@@ -2,20 +2,54 @@
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from '@fastify/helmet';
 import { AppModule } from './app.module';
 
+function isTrustedProxy(address: string): boolean {
+  if (!address) return false;
+  if (address.startsWith('::ffff:')) address = address.slice(7);
+  if (address === '::1' || address.startsWith('fc') || address.startsWith('fd')) return true;
+  const parts = address.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((p) => Number.isNaN(p))) return false;
+  const [a, b] = parts;
+  return (
+    a === 10 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 127 && b === 0 && parts[2] === 0 && parts[3] === 1) ||
+    (a === 169 && b === 254)
+  );
+}
+
 async function bootstrap(): Promise<void> {
+  if (!process.env.ADMIN_API_KEY) {
+    throw new Error('ADMIN_API_KEY env var is required');
+  }
+  if (!process.env.INTERNAL_TOKEN) {
+    throw new Error('INTERNAL_TOKEN env var is required');
+  }
+  if (!process.env.ALLOWED_EMAILS?.trim()) {
+    console.warn('[api-gateway] ALLOWED_EMAILS is not set — Firebase logins will be denied');
+  }
+
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ logger: true }),
+    new FastifyAdapter({ logger: true, trustProxy: isTrustedProxy }),
   );
 
+  const corsOrigins = (process.env.CORS_ORIGINS ?? '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+
   app.enableCors({
-    origin: true, // Reflect request origin or specific configured domains
+    origin: corsOrigins.length ? corsOrigins : true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'X-API-Key'],
-    credentials: true,
+    credentials: false,
   });
+
+  await app.register(helmet, { contentSecurityPolicy: false });
 
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true }),

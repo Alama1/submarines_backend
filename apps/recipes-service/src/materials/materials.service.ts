@@ -44,7 +44,6 @@ export class MaterialsService {
   create(dto: CreateMaterialDto): Promise<BaseMaterial> {
     const mat = this.repo.create(dto);
 
-    // NPC-sourced items are always stocked to the max (target quantity)
     if (mat.whereToBuy === MaterialSource.NPC) {
       mat.currentStock = mat.desiredQuantity ?? 0;
     }
@@ -60,7 +59,6 @@ export class MaterialsService {
 
     const updates: Partial<BaseMaterial> = { ...dto };
 
-    // Keep NPC-sourced items maxed out whenever source or target changes
     if (effectiveSource === MaterialSource.NPC) {
       updates.currentStock = effectiveTarget;
     }
@@ -74,7 +72,6 @@ export class MaterialsService {
     try {
       await this.repo.remove(mat);
     } catch (err: unknown) {
-      // PostgreSQL FK violation: 23503
       if ((err as { code?: string }).code === '23503') {
         throw new ConflictException(
           'Material is referenced in one or more recipes and cannot be deleted',

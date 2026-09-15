@@ -76,27 +76,19 @@ export interface InProgressOrderFeedItem {
     lineTotal: number;
   }>;
   missingMaterials: MissingMaterial[];
-  /** Live profitability of the whole order: revenue (after discount) vs current material prices */
   financials: OrderFinancials;
 }
 
-/** Revenue vs material cost for an order (materials valued at effective prices).
- * Repair kits and other product rows are excluded entirely from both sides. */
 export interface OrderFinancials {
-  /** Revenue of the craftable parts in the order, after the order discount */
   revenue: number;
-  /** Cost of raw materials to craft the craftable parts in the order */
   materialCost: number;
-  /** revenue - materialCost */
   profit: number;
 }
 
-/** Requirements aggregated across ALL in-progress orders */
 export interface InProgressAggregate {
   revenue: number;
   materialCost: number;
   profit: number;
-  /** Every material required by any in-progress order, with the shortfall vs current stock */
   materials: InProgressMaterialRequirement[];
 }
 
@@ -104,11 +96,8 @@ export interface InProgressMaterialRequirement {
   materialId: string;
   name: string;
   itemId: number | null;
-  /** Total units required across all in-progress orders */
   needed: number;
-  /** Current stock covering the requirement */
   available: number;
-  /** needed - available (never below 0) */
   missing: number;
 }
 
@@ -116,10 +105,7 @@ export interface MissingMaterial {
   materialId: string;
   name: string;
   itemId: number | null;
-  /** Total units required to craft the parts still missing for this order */
   needed: number;
-  /** Units still unclaimed by earlier in-progress orders */
   available: number;
-  /** needed - available (never below 0) */
   missing: number;
 }

@@ -9,13 +9,13 @@ export class HealthController {
 
   @Public()
   @Get()
-  async check(): Promise<{ status: string; db: string; uptime: number }> {
+  async check(): Promise<{ status: string; db: string }> {
     let db = 'ok';
     try {
       await this.ds.query('SELECT 1');
     } catch {
       db = 'error';
     }
-    return { status: 'ok', db, uptime: Math.floor(process.uptime()) };
+    return { status: 'ok', db };
   }
 }

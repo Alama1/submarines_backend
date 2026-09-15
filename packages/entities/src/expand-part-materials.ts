@@ -6,16 +6,6 @@ export interface ExpandedMaterialRequirement {
   quantity: number;
 }
 
-/**
- * Resolves "part-as-material" references (a modified part requiring 1x its
- * non-modified counterpart) recursively into aggregated raw base-material
- * requirements.
- *
- * Returns a map: partId -> list of raw material requirements for crafting
- * one unit of that part, including every nested part's recipe. Direct
- * base-material rows are counted as-is; rows whose material matches another
- * SubmarinePart by name are expanded and multiplied by their quantity.
- */
 export function expandAllPartMaterials(
   parts: SubmarinePart[],
 ): Map<string, ExpandedMaterialRequirement[]> {

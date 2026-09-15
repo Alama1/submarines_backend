@@ -27,7 +27,6 @@ export interface SubmarinePart {
   desiredStock: number;
   updatedAt: string;
   materials?: PartMaterialInfo[];
-  /** Fully expanded raw material requirements (nested parts resolved) */
   expandedMaterials?: ExpandedMaterialRequirement[];
 }
 

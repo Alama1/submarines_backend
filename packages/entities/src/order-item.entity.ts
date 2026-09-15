@@ -10,17 +10,9 @@ export class OrderItem {
   @ManyToOne(() => Order, (order) => order.items, { onDelete: 'CASCADE' })
   order: Order;
 
-  /**
-   * Direct FK to SubmarinePart (SET NULL if part is deleted).
-   * Allows navigating to the live, current part from an order.
-   */
   @ManyToOne(() => SubmarinePart, { nullable: true, eager: true, onDelete: 'SET NULL' })
   part: SubmarinePart | null;
 
-  /**
-   * Snapshot fields — preserved permanently even if the part is renamed or repriced.
-   * These protect historical receipt accuracy and accounting totals.
-   */
   @Column()
   partName: string;
 
@@ -30,14 +22,12 @@ export class OrderItem {
   @Column({ type: 'int' })
   quantity: number;
 
-  /** Price captured at the moment the order was created */
   @Column({ type: 'int' })
   unitPrice: number;
 
   @Column({ type: 'int' })
   lineTotal: number;
 
-  /** The submarine build this part was ordered for, e.g. "Shark + Whale" */
   @Column({ type: 'text', nullable: true })
   buildName: string | null;
 }

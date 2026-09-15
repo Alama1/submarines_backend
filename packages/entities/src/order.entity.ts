@@ -15,18 +15,15 @@ export class Order {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  /** Short unique human-readable code shared with admin (e.g. SUB-7K9P-2M4X-8QRT) */
   @Column({ unique: true, length: 24 })
   orderCode: string;
 
   @Column()
   clientName: string;
 
-  /** When true, the client's name is hidden from public endpoints and shown as "Anonymous" */
   @Column({ default: false })
   isAnonymous: boolean;
 
-  /** Optional Discord tag or in-game character contact */
   @Column({ type: 'text', nullable: true })
   contactInfo: string | null;
 
@@ -51,11 +48,9 @@ export class Order {
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 
-  /** ISO date string or human-readable delivery date */
   @Column({ type: 'text', nullable: true })
   fulfillmentDt: string | null;
 
-  /** Timestamp when admin confirmed/activated the order with the code */
   @Column({ type: 'timestamptz', nullable: true })
   confirmedAt: Date | null;
 

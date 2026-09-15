@@ -9,8 +9,6 @@
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-// ─── Single item inside a bag ──────────────────────────────────────────────
-
 export class PluginItemDto {
   @IsInt()
   itemId: number;
@@ -29,8 +27,6 @@ export class PluginItemDto {
   condition?: number;
 }
 
-// ─── A named bag (Inventory1, Crystals, RetainerInventory, RetainerGil …) ──
-
 export class PluginBagDto {
   @IsString()
   bagName: string;
@@ -40,8 +36,6 @@ export class PluginBagDto {
   @Type(() => PluginItemDto)
   items: PluginItemDto[];
 }
-
-// ─── A retainer entry ──────────────────────────────────────────────────────
 
 export class PluginRetainerDto {
   @IsString()
@@ -60,8 +54,6 @@ export class PluginRetainerDto {
   bags: PluginBagDto[];
 }
 
-// ─── Top-level payload from the FFXIV plugin ───────────────────────────────
-
 export class IngestDto {
   @IsOptional()
   @IsString()
@@ -75,14 +67,12 @@ export class IngestDto {
   @IsString()
   timestamp?: string;
 
-  /** Player character bags (Inventory1-4, Crystals, etc.) */
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => PluginBagDto)
   playerInventory?: PluginBagDto[];
 
-  /** All retainer inventories */
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })

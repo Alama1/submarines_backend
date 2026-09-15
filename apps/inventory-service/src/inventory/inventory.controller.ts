@@ -22,7 +22,6 @@ import { CreateClaimDto } from './dto/create-claim.dto';
 export class InventoryController {
   constructor(private readonly svc: InventoryService) {}
 
-  /** Returns all materials with stock counts. Cached in Redis for 30 seconds. */
   @Get()
   @UseInterceptors(CacheInterceptor)
   @CacheTTL(30)
@@ -36,7 +35,6 @@ export class InventoryController {
     return this.svc.findAll(search, p, l);
   }
 
-  /** All materials with claim info; fully stocked items report deficit 0 */
   @Get('missing')
   findMissing(
     @Query('search') search?: string,
@@ -48,7 +46,6 @@ export class InventoryController {
     return this.svc.findMissing(search, p, l);
   }
 
-  /** Repair/utility supplies (e.g. Magitek Repair Materials), kept out of the crafting inventory */
   @Get('repair')
   findRepairs(
     @Query('search') search?: string,
@@ -60,7 +57,6 @@ export class InventoryController {
     return this.svc.findRepairs(search, p, l);
   }
 
-  /** All claims across every material (claims overview window) — must be declared before :id */
   @Get('claims')
   findAllClaims() {
     return this.svc.findAllClaims();
@@ -71,29 +67,23 @@ export class InventoryController {
     return this.svc.findOne(id);
   }
 
-  // ── Claims (person pledges to deliver part of a missing material) ──────
-
-  /** All claims for a material + deficit summary */
   @Get(':id/claims')
   findClaims(@Param('id') id: string) {
     return this.svc.findClaims(id);
   }
 
-  /** Claim a quantity of the material for a person */
   @Post(':id/claims')
   @HttpCode(HttpStatus.CREATED)
   createClaim(@Param('id') id: string, @Body() dto: CreateClaimDto) {
     return this.svc.createClaim(id, dto);
   }
 
-  /** Remove a claim */
   @Delete('claims/:claimId')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteClaim(@Param('claimId') claimId: string): Promise<void> {
     return this.svc.deleteClaim(claimId);
   }
 
-  /** Browser extension ingest payload -> RabbitMQ -> 202 Accepted */
   @Post('ingest')
   @HttpCode(HttpStatus.ACCEPTED)
   ingest(@Body() dto: IngestDto) {

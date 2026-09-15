@@ -22,11 +22,6 @@ export class UniversalisClient {
     return this.config.get<string>('UNIVERSALIS_WORLD', 'Louisoix');
   }
 
-  /**
-   * Fetches latest market prices for a list of item IDs.
-   * Returns a Map of itemId -> marketPrice (in gil).
-   * Pass `worldOverride` to sync a specific world (e.g. from app settings).
-   */
   async fetchMarketPrices(
     itemIds: number[],
     worldOverride?: string,
@@ -42,6 +37,7 @@ export class UniversalisClient {
       this.logger.debug(`Fetching Universalis prices for ${itemIds.length} items from world "${world}"...`);
       const res = await fetch(url, {
         headers: { 'User-Agent': 'FF14-Submarines-Backend/1.0' },
+        signal: AbortSignal.timeout(10_000),
       });
 
       if (!res.ok) {
@@ -59,7 +55,6 @@ export class UniversalisClient {
       };
 
       if (data.items) {
-        // Multi-item response
         for (const [idStr, itemData] of Object.entries(data.items)) {
           const itemId = parseInt(idStr, 10);
           const price = this.extractPrice(itemData);
@@ -68,7 +63,6 @@ export class UniversalisClient {
           }
         }
       } else if (data.itemID) {
-        // Single item response
         const price = this.extractPrice(data);
         if (price !== null) {
           priceMap.set(data.itemID, price);
@@ -82,7 +76,6 @@ export class UniversalisClient {
   }
 
   private extractPrice(item: UniversalisItemPrice): number | null {
-    // Prefer minPriceNQ (NQ minimum price on market board), then minPrice, then average NQ
     const raw = item.minPriceNQ ?? item.minPrice ?? item.currentAveragePriceNQ ?? item.currentAveragePrice;
     if (raw === undefined || raw === null || Number.isNaN(raw)) return null;
     return Math.round(raw);

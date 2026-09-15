@@ -1,22 +1,19 @@
-﻿version: '3.8'
-
-x-app-env: &app-env
+﻿x-app-env: &app-env
   POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
   POSTGRES_PORT: ${POSTGRES_PORT:-5432}
   POSTGRES_DB: ${POSTGRES_DB:-ff14_db}
   POSTGRES_USER: ${POSTGRES_USER:-ff14}
-  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ff14local}
-  REDIS_HOST: redis
-  RABBITMQ_URL: amqp://${RABBITMQ_USER:-ff14}:${RABBITMQ_PASS:-ff14local}@rabbitmq:5672
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+  RABBITMQ_URL: amqp://${RABBITMQ_USER:-ff14}:${RABBITMQ_PASS:?RABBITMQ_PASS is required}@rabbitmq:5672
+  INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN is required}
 
 services:
-  # ── Infrastructure ──────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-ff14_db}
       POSTGRES_USER: ${POSTGRES_USER:-ff14}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ff14local}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -26,20 +23,11 @@ services:
       retries: 5
     restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
   rabbitmq:
     image: rabbitmq:3-management-alpine
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-ff14}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-ff14local}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:?RABBITMQ_PASS is required}
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "check_running"]
       interval: 10s
@@ -47,7 +35,6 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # ── Frontend & Gateway ──────────────────────────────────────────
   admin-panel:
     image: ghcr.io/${IMAGE_PREFIX:-user/submarines}-admin-panel:latest
     ports:
@@ -72,26 +59,20 @@ services:
     environment:
       <<: *app-env
       PORT: ${API_GATEWAY_PORT:-3000}
-      ADMIN_API_KEY: ${ADMIN_API_KEY:-ff14-submarines-dev-key}
-      ALLOWED_EMAILS: ${ALLOWED_EMAILS:-}
-      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
-      FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL:-}
-      FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY:-}
-      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:?ADMIN_API_KEY is required}
+      ALLOWED_EMAILS: ${ALLOWED_EMAILS:?ALLOWED_EMAILS is required}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
     depends_on:
       postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     restart: unless-stopped
 
-  # ── Microservices ───────────────────────────────────────────────
   prices-service:
     image: ghcr.io/${IMAGE_PREFIX:-user/submarines}-prices-service:latest
     environment:
       <<: *app-env
     depends_on:
       postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     restart: unless-stopped
 
@@ -101,7 +82,6 @@ services:
       <<: *app-env
     depends_on:
       postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     restart: unless-stopped
 
@@ -111,7 +91,6 @@ services:
       <<: *app-env
     depends_on:
       postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     restart: unless-stopped
 
@@ -121,17 +100,14 @@ services:
       <<: *app-env
     depends_on:
       postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
     restart: unless-stopped
 
-  # ── Background Workers ──────────────────────────────────────────
   price-worker:
     image: ghcr.io/${IMAGE_PREFIX:-user/submarines}-price-worker:latest
     environment:
       <<: *app-env
     depends_on:
       postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     restart: unless-stopped
 
@@ -141,9 +117,9 @@ services:
       <<: *app-env
     depends_on:
       postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     restart: unless-stopped
 
 volumes:
   postgres_data:
+  rabbitmq_data:

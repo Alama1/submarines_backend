@@ -19,12 +19,6 @@ export class XivApiClient {
   private readonly logger = new Logger(XivApiClient.name);
   private readonly baseUrl = 'https://v2.xivapi.com/api/search';
 
-  /**
-   * Resolves the in-game item ID for an item name via the XIVAPI v2 search
-   * endpoint (sheet "Item"). Mirrors the original "fetchAndSetIds" Sheets
-   * logic: query `Name~"<name>"` with limit 1 and take the first result's
-   * row_id. Returns null when nothing matches or the request fails.
-   */
   async searchItemId(name: string): Promise<number | null> {
     const url =
       `${this.baseUrl}?sheets=Item&language=en&limit=1&fields=Name,ID` +

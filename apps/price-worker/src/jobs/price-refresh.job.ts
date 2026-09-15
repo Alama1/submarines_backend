@@ -7,6 +7,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { AppSetting, BaseMaterial } from '@ff14/entities';
 import { UNIVERSALIS_WORLD_KEY } from '@ff14/types';
+import { readEnvelope } from '@ff14/internal-auth';
 import { UniversalisClient } from '../universalis/universalis.client';
 
 @Injectable()
@@ -23,17 +24,20 @@ export class PriceRefreshJob {
     @Optional() @Inject(CACHE_MANAGER) private readonly cache?: Cache,
   ) {}
 
-  /** Runs every 5 minutes by default */
   @Cron('0 */5 * * * *')
   async handleCron(): Promise<void> {
     this.logger.log('Starting scheduled Universalis price refresh...');
     await this.runRefresh();
   }
 
-  /** RabbitMQ message pattern to trigger a price refresh on demand */
   @MessagePattern('universalis_price_refresh')
-  async handleMessage(@Payload() data?: { force?: boolean }): Promise<{ success: boolean; updatedCount: number }> {
-    this.logger.log(`Received manual price refresh request (force: ${data?.force ?? false})`);
+  async handleMessage(@Payload() envelope?: unknown): Promise<{ success: boolean; updatedCount: number }> {
+    const data = readEnvelope<{ force?: boolean }>(envelope);
+    if (!data) {
+      this.logger.warn('Rejected universalis_price_refresh message with invalid or missing internal token');
+      return { success: false, updatedCount: 0 };
+    }
+    this.logger.log(`Received manual price refresh request (force: ${data.force ?? false})`);
     const count = await this.runRefresh();
     return { success: true, updatedCount: count };
   }
@@ -48,13 +52,11 @@ export class PriceRefreshJob {
     let updatedCount = 0;
 
     try {
-      // 0. Resolve the target world: DB setting -> env -> 'Louisoix'
       const settingRow = await this.settingRepo.findOne({
         where: { key: UNIVERSALIS_WORLD_KEY },
       });
       const world = settingRow?.value?.trim() || this.universalis.getWorld();
 
-      // 1. Fetch all materials that have a valid Universalis itemId
       const materials = await this.materialRepo
         .createQueryBuilder('m')
         .where('m.item_id IS NOT NULL')
@@ -67,7 +69,6 @@ export class PriceRefreshJob {
 
       this.logger.log(`Found ${materials.length} materials with itemId to sync (world: "${world}").`);
 
-      // 2. Batch item IDs into chunks of 50
       const chunkSize = 50;
       const chunks: BaseMaterial[][] = [];
       for (let i = 0; i < materials.length; i += chunkSize) {
@@ -97,7 +98,6 @@ export class PriceRefreshJob {
 
       this.logger.log(`Universalis price refresh complete. Updated ${updatedCount} material prices.`);
 
-      // 3. Invalidate Redis cache if available
       if (this.cache) {
         try {
           await this.cache.reset();

@@ -48,7 +48,6 @@ export class RecipesService {
     return withExpanded;
   }
 
-  /** Enriches parts with the fully expanded (nested) raw material requirements. */
   private async attachExpanded(
     parts: SubmarinePart[],
   ): Promise<(SubmarinePart & { expandedMaterials?: ExpandedMaterialRequirement[] })[]> {
@@ -59,28 +58,15 @@ export class RecipesService {
     }));
   }
 
-  /**
-   * Recalculates desiredQuantity for every BaseMaterial based on:
-   * sum(part.desiredStock * partMaterial.quantity) across all registered submarine parts,
-   * with part-as-material references (modified parts) expanded into their full
-   * raw material requirements.
-   */
   async recalculateMaterialTargets(): Promise<{
     updatedCount: number;
     totalRequirements: Record<string, number>;
   }> {
-    // 1. Fetch all submarine parts with their material relations
     const parts = await this.partRepo.find({
       relations: ['materials', 'materials.material'],
     });
     const expanded = expandAllPartMaterials(parts);
 
-    // 2. Aggregate required materials:
-    //    - part-as-material rows (modified parts needing their base part) are
-    //      counted directly, so the workshop knows how many base parts to keep
-    //      ready — these rows are NOT raw materials and are excluded from the
-    //      expanded chain
-    //    - raw materials are counted once via the fully expanded chain
     const partNames = new Set(parts.map((p) => p.name.toLowerCase()));
     const materialDesiredMap = new Map<string, number>();
     const addRequirement = (materialId: string, qty: number) => {
@@ -102,21 +88,17 @@ export class RecipesService {
       }
     }
 
-    // 3. Fetch all base materials and update desiredQuantity
     const allMaterials = await this.ds.getRepository(BaseMaterial).find();
     const requirementsObj: Record<string, number> = {};
 
     await this.ds.transaction(async (em) => {
       for (const mat of allMaterials) {
-        // Repair/utility supplies (e.g. Magitek Repair Materials) have manually
-        // managed targets and are never derived from part goals
         if (mat.category === MaterialCategory.REPAIR) continue;
 
         const calculatedTarget = materialDesiredMap.get(mat.id) || 0;
         requirementsObj[mat.name] = calculatedTarget;
         if (mat.desiredQuantity !== calculatedTarget) {
           mat.desiredQuantity = calculatedTarget;
-          // NPC-sourced items are always stocked to the max
           if (mat.whereToBuy === MaterialSource.NPC) {
             mat.currentStock = calculatedTarget;
           }
@@ -176,7 +158,6 @@ export class RecipesService {
       await em.save(part);
 
       if (materials !== undefined) {
-        // Replace materials list atomically
         await em
           .createQueryBuilder()
           .delete()
@@ -209,7 +190,6 @@ export class RecipesService {
   async remove(id: string): Promise<void> {
     const part = await this.findOne(id);
 
-    // Block deletion if part is in any non-cancelled order (order-worker needs it)
     const activeOrders: unknown[] = await this.ds.query(
       `SELECT oi.id
        FROM order_items oi

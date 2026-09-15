@@ -16,29 +16,30 @@
     "migration:show": "pnpm typeorm migration:show"
   },
   "dependencies": {
+    "@fastify/static": "^8.3.0",
     "@ff14/entities": "workspace:*",
+    "@ff14/internal-auth": "workspace:*",
     "@ff14/types": "workspace:*",
+    "@nestjs/cache-manager": "^2.3.0",
     "@nestjs/common": "^11.0.0",
+    "@nestjs/config": "^3.3.0",
     "@nestjs/core": "^11.0.0",
+    "@nestjs/mapped-types": "*",
+    "@nestjs/microservices": "^11.0.0",
     "@nestjs/platform-fastify": "^11.0.0",
     "@nestjs/swagger": "^11.0.0",
-    "@fastify/static": "^8.0.0",
-    "@nestjs/config": "^3.3.0",
     "@nestjs/typeorm": "^10.0.2",
-    "@nestjs/cache-manager": "^2.3.0",
-    "@nestjs/microservices": "^11.0.0",
+    "amqp-connection-manager": "^4.1.14",
+    "amqplib": "^0.10.5",
     "cache-manager": "^5.7.6",
     "cache-manager-ioredis-yet": "^2.1.0",
-    "amqplib": "^0.10.5",
-    "amqp-connection-manager": "^4.1.14",
-    "typeorm": "^0.3.20",
-    "pg": "^8.13.3",
-    "class-validator": "^0.14.1",
     "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "pg": "^8.13.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "typeorm-naming-strategies": "^4.1.0",
-    "@nestjs/mapped-types": "*"
+    "typeorm": "^0.3.20",
+    "typeorm-naming-strategies": "^4.1.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
@@ -46,8 +47,8 @@
     "@nestjs/testing": "^11.0.0",
     "@types/amqplib": "^0.10.6",
     "@types/node": "^22.0.0",
-    "typescript": "^5.0.0",
+    "dotenv": "^16.4.5",
     "ts-node": "^10.9.2",
-    "dotenv": "^16.4.5"
+    "typescript": "^5.0.0"
   }
 }

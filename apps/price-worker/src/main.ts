@@ -3,14 +3,19 @@ import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
+  if (!process.env.RABBITMQ_URL) {
+    throw new Error('RABBITMQ_URL env var is required');
+  }
+  if (!process.env.INTERNAL_TOKEN) {
+    throw new Error('INTERNAL_TOKEN env var is required');
+  }
+
   const app = await NestFactory.createMicroservice<MicroserviceOptions>(
     AppModule,
     {
       transport: Transport.RMQ,
       options: {
-        urls: [
-          process.env.RABBITMQ_URL ?? 'amqp://ff14:ff14local@localhost:5672',
-        ],
+        urls: [process.env.RABBITMQ_URL],
         queue: 'universalis_price_refresh',
         queueOptions: { durable: true },
         noAck: false,

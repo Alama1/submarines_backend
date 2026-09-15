@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   Logger,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
@@ -42,14 +43,16 @@ export class AuthGuard implements CanActivate {
     const rawUrl = (req.raw?.url || req.url || '').split('?')[0];
     const method = req.method;
 
-    // 1. Check for X-API-Key header (used by admin panel & browser extension / plugin)
     const apiKey = headers['x-api-key'];
     if (apiKey && typeof apiKey === 'string') {
       const trimmedKey = apiKey.trim();
 
-      // Check against configured master Admin Key (or default dev key)
-      const masterKey = this.config.get<string>('ADMIN_API_KEY', 'ff14-submarines-dev-key');
-      if (masterKey && trimmedKey === masterKey) {
+      const masterKey = this.config.get<string>('ADMIN_API_KEY');
+      if (!masterKey) {
+        this.logger.error('ADMIN_API_KEY is not configured — refusing all API key authentication');
+        throw new ServiceUnavailableException('Server is missing ADMIN_API_KEY configuration');
+      }
+      if (safeEqual(trimmedKey, masterKey)) {
         req.user = { type: 'api_key', label: 'Master Admin' };
         return true;
       }
@@ -60,7 +63,6 @@ export class AuthGuard implements CanActivate {
       });
 
       if (keyEntity) {
-        // Update last used timestamp asynchronously
         keyEntity.lastUsedAt = new Date();
         this.apiKeyRepo.save(keyEntity).catch(() => {});
         req.user = { type: 'api_key', label: keyEntity.label };
@@ -70,25 +72,30 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Invalid or inactive API key');
     }
 
-    // 2. Check for Authorization: Bearer <FirebaseIdToken>
     const authHeader = headers['authorization'];
     if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7).trim();
       try {
         const user = await this.firebaseService.verifyIdToken(token);
 
-        // Check allowed emails if configured
-        const allowedEmailsConfig = this.config.get<string>('ALLOWED_EMAILS');
-        if (allowedEmailsConfig) {
-          const allowedList = allowedEmailsConfig
-            .split(',')
-            .map((e) => e.trim().toLowerCase())
-            .filter(Boolean);
+        const allowedList = (this.config.get<string>('ALLOWED_EMAILS') ?? '')
+          .split(',')
+          .map((e) => e.trim().toLowerCase())
+          .filter(Boolean);
 
-          if (user.email && !allowedList.includes(user.email.toLowerCase())) {
-            this.logger.warn(`User ${user.email} not in ALLOWED_EMAILS list`);
-            throw new ForbiddenException('User is not authorized to access this backend');
-          }
+        if (!allowedList.length) {
+          this.logger.error('ALLOWED_EMAILS is not configured — denying Firebase authentication');
+          throw new ForbiddenException('Firebase access is not configured on this server');
+        }
+        if (!user.email) {
+          throw new ForbiddenException('Token has no email claim');
+        }
+        if (!user.emailVerified) {
+          throw new ForbiddenException('Token email is not verified');
+        }
+        if (!allowedList.includes(user.email.toLowerCase())) {
+          this.logger.warn(`User ${user.email} not in ALLOWED_EMAILS list`);
+          throw new ForbiddenException('User is not authorized to access this backend');
         }
 
         req.user = { type: 'firebase', uid: user.uid, email: user.email };
@@ -100,21 +107,14 @@ export class AuthGuard implements CanActivate {
       }
     }
 
-    // 3. Public Customer Routes (Allow public order submission & lookup, catalogue viewing)
     const isPublicClientRoute =
       rawUrl === '/api/health' ||
       rawUrl === '/health' ||
-      // Public customer creating an order request
       (method === 'POST' && (rawUrl === '/api/orders' || rawUrl === '/orders')) ||
-      // Public customer looking up their order by confirmation code
       (method === 'GET' && (rawUrl.startsWith('/api/orders/lookup/') || rawUrl.startsWith('/orders/lookup/'))) ||
-      // Public in-progress orders feed (for real-time progress page on customer site)
       (method === 'GET' && (rawUrl === '/api/orders/in-progress' || rawUrl === '/orders/in-progress')) ||
-      // Public missing-materials feed with claims (for the "what we need" page on customer site)
       (method === 'GET' && (rawUrl === '/api/inventory/missing' || rawUrl === '/inventory/missing')) ||
-      // Public Swagger docs for the downstream services (used by the client FE developer)
       (method === 'GET' && (rawUrl.startsWith('/api/docs') || rawUrl.startsWith('/docs'))) ||
-      // Public browsing of parts, materials, prices, discounts
       (method === 'GET' &&
         (rawUrl.startsWith('/api/recipes') ||
           rawUrl.startsWith('/recipes') ||
@@ -131,4 +131,10 @@ export class AuthGuard implements CanActivate {
 
     throw new UnauthorizedException('Authentication credentials required for admin actions (Bearer token or X-API-Key)');
   }
+}
+
+function safeEqual(provided: string, expected: string): boolean {
+  const a = crypto.createHash('sha256').update(provided).digest();
+  const b = crypto.createHash('sha256').update(expected).digest();
+  return crypto.timingSafeEqual(a, b);
 }

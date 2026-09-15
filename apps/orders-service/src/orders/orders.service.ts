@@ -23,11 +23,8 @@ import { UpdateOrderNotesDto } from './dto/update-notes.dto';
 
 @Injectable()
 export class OrdersService {
-  /** Only these craftable part types count toward bulk-discount tiers and order
-   * profitability; product rows like repair kits (partType 'Materials') do not */
   private static readonly CRAFTABLE_PART_TYPES = new Set(['bow', 'bridge', 'hull', 'stern']);
 
-  /** Orders that may still be edited: confirmed and in production */
   private static readonly EDITABLE_STATUSES = new Set<OrderStatus>(['confirmed', 'in_progress']);
 
   constructor(
@@ -41,12 +38,6 @@ export class OrdersService {
     private readonly ds: DataSource,
   ) {}
 
-  /**
-   * Generates a unique, hard-to-guess order code, e.g. SUB-7K9P-2M4X-8QRT.
-   * 12 random characters from a 32-char alphabet (no 0/O, 1/I) in three
-   * groups — ~1.15e18 combinations, so confirmation codes can't be guessed
-   * to peek at other customers' orders.
-   */
   private async generateUniqueOrderCode(): Promise<string> {
     const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // Excludes confusing characters 0/O, 1/I
     const group = (): string => {
@@ -65,15 +56,9 @@ export class OrdersService {
         return code;
       }
     }
-    // Fallback if loop finishes (practically impossible with 32^12 combos)
     return `SUB-${Date.now().toString(36).toUpperCase()}`;
   }
 
-  /**
-   * Masks a client name for public endpoints: keeps the first 2 and the
-   * last letter ("Alexander" -> "Al***r"). Short names only keep their
-   * first letter so they aren't fully revealed.
-   */
   private maskClientName(name: string | null | undefined): string {
     const trimmed = (name ?? '').trim();
     if (trimmed.length <= 4) {
@@ -82,10 +67,6 @@ export class OrdersService {
     return `${trimmed.slice(0, 2)}***${trimmed.slice(-1)}`;
   }
 
-  /**
-   * Public display name for an order: anonymous orders fully replace the
-   * name with "Anonymous" (not masked), everything else gets masked.
-   */
   private publicClientName(order: Pick<Order, 'clientName' | 'isAnonymous'>): string {
     if (order.isAnonymous) return 'Anonymous';
     return this.maskClientName(order.clientName);
@@ -100,8 +81,6 @@ export class OrdersService {
       .createQueryBuilder('o')
       .leftJoinAndSelect('o.items', 'items')
       .leftJoinAndSelect('items.part', 'part')
-      // Unconfirmed (pending) orders are hidden everywhere — spam protection.
-      // They only become visible once activated with their confirmation code.
       .where('o.status != :hidden', { hidden: 'pending' });
 
     if (statuses && statuses.length > 0) {
@@ -117,11 +96,6 @@ export class OrdersService {
     return { items, total };
   }
 
-  /**
-   * In-progress orders feed. Client names are masked unless `unmask` is set —
-   * the unmasked variant is only exposed through the admin-only endpoint
-   * (protected by the gateway auth), the public customer site stays masked.
-   */
   async findInProgress(unmask = false): Promise<{
     orders: Array<{
       id: string;
@@ -193,8 +167,6 @@ export class OrdersService {
     }
     const expanded = expandAllPartMaterials(allParts);
 
-    // Live crafting cost for one unit of every part, using each material's
-    // effective price (manual override > market > NPC)
     const costPerPart = new Map<string, number>();
     for (const p of allParts) {
       let cost = 0;
@@ -206,15 +178,10 @@ export class OrdersService {
       costPerPart.set(p.id, cost);
     }
 
-    // Stock is shared across simultaneous builds: earlier orders (by confirmedAt,
-    // the same order the feed is displayed in) claim materials first, and later
-    // orders only get what's left — so their missing lists reflect reality.
     const availableStock = new Map<string, number>();
 
     const mapped = orders.map((o) => {
       let materialCost = 0;
-      // Repair kits (product rows like 'Materials') never count toward profit:
-      // neither their sale revenue nor their crafting cost.
       let partsRevenue = 0;
       const items = (o.items ?? []).map((item) => {
         const part = partsById.get(item.part?.id ?? '') ?? item.part;
@@ -238,8 +205,6 @@ export class OrdersService {
           lineTotal: item.lineTotal,
         };
       });
-      // Bulk discounts are earned by craftable parts only, so the whole
-      // discount is subtracted from the parts' revenue.
       const revenue = Math.max(0, partsRevenue - o.discountAmt);
 
       return {
@@ -247,8 +212,8 @@ export class OrdersService {
         orderCode: o.orderCode,
         clientName: unmask ? o.clientName : this.publicClientName(o),
         isAnonymous: o.isAnonymous,
-        contactInfo: o.contactInfo,
-        notes: o.notes,
+        contactInfo: unmask ? o.contactInfo : null,
+        notes: unmask ? o.notes : null,
         confirmedAt: o.confirmedAt,
         createdAt: o.createdAt,
         items,
@@ -293,17 +258,6 @@ export class OrdersService {
     };
   }
 
-  /**
-   * Aggregates the raw material requirements of every in-progress order into a
-   * single shopping list, then reports the shortfall against current stock —
-   * so big simultaneous orders that together eat the whole stock are visible
-   * in one place (unlike the per-order lists, which allocate shared stock
-   * sequentially).
-   *
-   * Part-as-material rows (modified parts needing their base part) are fully
-   * resolved: only the raw materials for the units not already covered by
-   * nested part stock are listed.
-   */
   private computeAggregate(
     orders: Order[],
     partsById: Map<string, SubmarinePart>,
@@ -320,7 +274,6 @@ export class OrdersService {
       missing: number;
     }>;
   } {
-    // Units still to craft per part across all in-progress orders
     const demandByPart = new Map<string, number>();
     for (const o of orders) {
       for (const item of o.items ?? []) {
@@ -348,8 +301,6 @@ export class OrdersService {
       }
     }
 
-    // Nested part stock covers part-as-material needs; covered units remove
-    // their own raw requirements (they are already crafted)
     const coveredByPart = new Map<string, number>();
     for (const [nestedId, needed] of partNeeds) {
       const nested = partsById.get(nestedId);
@@ -393,16 +344,6 @@ export class OrdersService {
     return { materials };
   }
 
-  /**
-   * Computes what materials an in-progress order is still short of, using the
-   * recipes (PartMaterial rows) of every part that still needs crafting.
-   *
-   * Part-as-material rows (modified parts requiring their base part) are fully
-   * resolved into raw base materials: the order needs the units still missing
-   * after the nested part's stock, so only those uncovered units contribute
-   * raw requirements. The result is a flat raw-material shopping list — no
-   * intermediate parts are listed.
-   */
   private computeMissingMaterials(
     order: Order,
     partsById: Map<string, SubmarinePart>,
@@ -463,8 +404,6 @@ export class OrdersService {
       missing: number;
     }> = [];
 
-    // Nested part stock covers part-as-material needs; the raw requirements
-    // of the covered units are already crafted and get subtracted.
     for (const { part: nested, needed } of partNeeds.values()) {
       const covered = Math.min(needed, nested.stock);
       if (covered > 0) {
@@ -504,11 +443,6 @@ export class OrdersService {
     return order;
   }
 
-  /**
-   * Order lookup by confirmation code. The client name is masked unless
-   * `unmask` is set — the unmasked variant is only exposed through the
-   * admin-only endpoint (protected by the gateway auth).
-   */
   async findByCode(code: string, unmask = false): Promise<Order> {
     const normalized = code.trim().toUpperCase();
     const order = await this.orderRepo
@@ -519,15 +453,18 @@ export class OrdersService {
       .getOne();
 
     if (!order) throw new NotFoundException(`Order with code "${code}" not found`);
-    // Public lookup — mask the client name so codes can't be used to harvest names
-    return unmask ? order : { ...order, clientName: this.publicClientName(order) };
+    return unmask ? order : this.toPublicOrder(order);
   }
 
-  /**
-   * Order pricing shared by create and update: sums line totals into a
-   * subtotal, then applies the highest bulk-discount tier the total count of
-   * craftable parts qualifies for.
-   */
+  private toPublicOrder(order: Order): Order {
+    return {
+      ...order,
+      clientName: this.publicClientName(order),
+      contactInfo: null,
+      notes: null,
+    };
+  }
+
   private computePricing(
     preparedItems: Array<{ part: SubmarinePart; quantity: number; unitPrice: number }>,
     discounts: BulkDiscount[],
@@ -559,14 +496,12 @@ export class OrdersService {
     const parts = await this.partRepo.find({ where: { id: In(partIds) } });
     const partMap = new Map<string, SubmarinePart>(parts.map((p) => [p.id, p]));
 
-    // Verify all parts exist
     for (const itemDto of dto.items) {
       if (!partMap.has(itemDto.partId)) {
         throw new NotFoundException(`Submarine part "${itemDto.partId}" not found`);
       }
     }
 
-    // 1. Calculate line totals and subtotal
     const preparedItems: Array<{
       part: SubmarinePart;
       quantity: number;
@@ -584,7 +519,6 @@ export class OrdersService {
       });
     }
 
-    // 2. Fetch bulk discounts and apply the highest matching tier based on total parts quantity
     const discounts = await this.discountRepo.find({
       order: { threshold: 'DESC' },
     });
@@ -594,7 +528,6 @@ export class OrdersService {
     );
     const orderCode = await this.generateUniqueOrderCode();
 
-    // 3. Save Order and OrderItems in a transaction with 'pending' status
     const savedOrder = await this.ds.transaction(async (em) => {
       const order = em.create(Order, {
         orderCode,
@@ -635,18 +568,11 @@ export class OrdersService {
     return savedOrder!;
   }
 
-  /**
-   * Admin confirms & activates the order by providing the client's confirmation code.
-   * Orders never touch inventory — this only stamps the confirmation and moves
-   * the order to in_progress; admins manage further status changes manually.
-   */
   async confirmByCode(code: string): Promise<Order> {
-    // Admin-only route — return the unmasked client name in the response
     const order = await this.findByCode(code, true);
     return this.activateOrder(order);
   }
 
-  /** Admin confirms & activates the order by order ID. */
   async confirmById(id: string): Promise<Order> {
     const order = await this.findOne(id);
     return this.activateOrder(order);
@@ -679,12 +605,6 @@ export class OrdersService {
     return this.findOne(id);
   }
 
-  /**
-   * Admin edit for mistakes in orders: client details and/or the item list.
-   * Only active orders (confirmed / in_progress) can be edited. Replacement
-   * items are re-priced at the current part prices and the bulk discount is
-   * recalculated, exactly like on order creation.
-   */
   async update(id: string, dto: UpdateOrderDto): Promise<Order> {
     const order = await this.findOne(id);
     if (!OrdersService.EDITABLE_STATUSES.has(order.status)) {

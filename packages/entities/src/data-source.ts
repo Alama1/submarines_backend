@@ -16,16 +16,21 @@ import { PartSetItem } from './part-set-item.entity';
 dotenv.config({ path: '../../.env' });
 dotenv.config({ path: '.env.local' });
 
+const password = process.env.POSTGRES_PASSWORD;
+if (!password) {
+  throw new Error('POSTGRES_PASSWORD env var is required');
+}
+
 export const AppDataSource = new DataSource({
   type: 'postgres',
   host:     process.env.POSTGRES_HOST ?? 'localhost',
   port:     parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
   database: process.env.POSTGRES_DB ?? 'ff14_db',
   username: process.env.POSTGRES_USER ?? 'ff14',
-  password: process.env.POSTGRES_PASSWORD ?? 'ff14local',
+  password,
   entities: [BaseMaterial, PartMaterial, SubmarinePart, MaterialClaim, AppSetting, Order, OrderItem, BulkDiscount, PartSet, PartSetItem],
   migrations: ['src/migrations/*.ts'],
   namingStrategy: new SnakeNamingStrategy(),
   synchronize: false,
-  logging: true,
+  logging: process.env.NODE_ENV !== 'production',
 });

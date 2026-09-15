@@ -4,15 +4,11 @@ import { IsNull, Repository } from 'typeorm';
 import { BaseMaterial, SubmarinePart } from '@ff14/entities';
 import { XivApiClient } from '../xivapi/xivapi.client';
 
-/** Pause between XIVAPI requests to stay well within rate limits */
 const REQUEST_DELAY_MS = 120;
 
 export interface IdResolutionSummary {
-  /** Entries that had no itemId and were processed */
   scanned: number;
-  /** Entries that received an itemId */
   updated: number;
-  /** Names for which XIVAPI returned no match */
   notFound: string[];
 }
 
@@ -33,12 +29,6 @@ export class ItemIdsService {
     private readonly partRepo: Repository<SubmarinePart>,
   ) {}
 
-  /**
-   * Finds every material and submarine part without an itemId and resolves
-   * it from XIVAPI (same behavior as the legacy "fetchAndSetIds" sheet macro:
-   * only rows with a name and no ID are touched, existing IDs are never
-   * overwritten).
-   */
   async resolveMissingIds(): Promise<MissingIdsReport> {
     const materials = await this.resolveMaterials();
     const parts = await this.resolveParts();

@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ApiKey } from '@ff14/entities';
 import { FirebaseService } from './firebase.service';
 import { AuthGuard } from './guards/auth.guard';
+import { RateLimitGuard } from './guards/rate-limit.guard';
 import { AuthController } from './auth.controller';
 
 @Module({
@@ -12,6 +13,11 @@ import { AuthController } from './auth.controller';
   providers: [
     FirebaseService,
     AuthGuard,
+    RateLimitGuard,
+    {
+      provide: APP_GUARD,
+      useClass: RateLimitGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: AuthGuard,

@@ -5,6 +5,7 @@ import * as admin from 'firebase-admin';
 export interface DecodedUser {
   uid: string;
   email?: string;
+  emailVerified?: boolean;
 }
 
 @Injectable()
@@ -40,7 +41,6 @@ export class FirebaseService implements OnModuleInit {
     }
 
     if (projectId && clientEmail && privateKey) {
-      // Replace escaped newlines if passed in via single-line env var
       privateKey = privateKey.replace(/\\n/g, '\n');
       try {
         admin.initializeApp({
@@ -70,6 +70,7 @@ export class FirebaseService implements OnModuleInit {
     return {
       uid: decoded.uid,
       email: decoded.email,
+      emailVerified: decoded.email_verified === true,
     };
   }
 }

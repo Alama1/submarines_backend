@@ -35,55 +35,46 @@ export class OrdersController {
     return this.svc.findAll(statuses, p, l);
   }
 
-  /** Public endpoint: all currently in-progress orders with live part stock levels (names masked) */
   @Get('in-progress')
   findInProgress() {
     return this.svc.findInProgress();
   }
 
-  /** Admin endpoint: in-progress feed with unmasked client names (gateway requires admin auth) */
   @Get('admin/in-progress')
   findInProgressAdmin() {
     return this.svc.findInProgress(true);
   }
 
-  /** Public lookup endpoint for clients to view order status via their code (name masked) */
   @Get('lookup/:code')
   findByCode(@Param('code') code: string) {
     return this.svc.findByCode(code);
   }
 
-  /** Admin lookup with unmasked client name (gateway requires admin auth) */
   @Get('admin/lookup/:code')
   findByCodeAdmin(@Param('code') code: string) {
     return this.svc.findByCode(code, true);
   }
-
 
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.svc.findOne(id);
   }
 
-  /** Client submits order -> returns created order with confirmation code */
   @Post()
   create(@Body() dto: CreateOrderDto) {
     return this.svc.create(dto);
   }
 
-  /** Admin activates/confirms order using the client's confirmation code */
   @Post('confirm')
   confirmByCode(@Body() dto: ConfirmOrderDto) {
     return this.svc.confirmByCode(dto.code);
   }
 
-  /** Admin edit of an active order (confirmed / in_progress): client details and/or items */
   @Put(':id')
   update(@Param('id') id: string, @Body() dto: UpdateOrderDto) {
     return this.svc.update(id, dto);
   }
 
-  /** Admin activates/confirms order by order ID */
   @Patch(':id/confirm')
   confirmById(@Param('id') id: string) {
     return this.svc.confirmById(id);

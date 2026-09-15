@@ -22,7 +22,6 @@ import { UpdatePartSetDto } from './dto/update-set.dto';
 export class PricesController {
   constructor(private readonly svc: PricesService) {}
 
-  /** Returns all materials with prices. Cached in Redis for 5 minutes. */
   @Get()
   @UseInterceptors(CacheInterceptor)
   @CacheTTL(300)
@@ -36,35 +35,26 @@ export class PricesController {
     return this.svc.findAll(search, p, l);
   }
 
-  /** Manually triggers the Universalis price refresh job (handled by price-worker via RabbitMQ). */
   @Post('refresh')
   refresh() {
     return this.svc.triggerRefresh();
   }
 
-  // ── Universalis settings (must be declared before the :id routes) ──────
-
-  /** Current Universalis world used for market sync */
   @Get('settings')
   getUniversalisSettings() {
     return this.svc.getUniversalisSettings();
   }
 
-  /** Change the Universalis world used for market sync */
   @Put('settings/world')
   updateUniversalisWorld(@Body() dto: UpdateWorldDto) {
     return this.svc.updateUniversalisWorld(dto);
   }
 
-  // ── Part sets (persistent profitability bundles, live-priced) ──────────
-
-  /** All saved sets with computed sale/cost/profit at current prices */
   @Get('sets')
   findSets() {
     return this.svc.findSets();
   }
 
-  /** Create a set, e.g. a full shark build (hull + stern + bow + bridge) */
   @Post('sets')
   @HttpCode(HttpStatus.CREATED)
   createSet(@Body() dto: CreatePartSetDto) {

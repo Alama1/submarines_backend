@@ -8,6 +8,7 @@ import { In, Repository } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { ClientProxy } from '@nestjs/microservices';
+import { createEnvelope } from '@ff14/internal-auth';
 import {
   BaseMaterial,
   MaterialCategory,
@@ -40,7 +41,6 @@ export interface MaterialClaimSummary {
   createdAt: Date;
 }
 
-/** Claim with the material context, used by the "all claims" overview */
 export interface ClaimWithMaterial extends MaterialClaimSummary {
   materialName: string;
   currentStock: number;
@@ -49,9 +49,7 @@ export interface ClaimWithMaterial extends MaterialClaimSummary {
 }
 
 export interface MissingMaterialItem extends InventoryItemStock {
-  /** Sum of all claim quantities against this material */
   claimed: number;
-  /** deficit - claimed (never below 0) */
   remaining: number;
   claims: MaterialClaimSummary[];
 }
@@ -131,12 +129,8 @@ export class InventoryService {
   ): Promise<{ items: MissingMaterialItem[]; total: number }> {
     const qb = this.repo
       .createQueryBuilder('m')
-      // Exclude "part-as-material" rows: submarine parts that also exist in
-      // base_materials. Clients can't craft or deliver parts — the missing
-      // list is for raw materials only
       .leftJoin(SubmarinePart, 'p', 'LOWER(p.name) = LOWER(m.name)')
       .where('m.category != :repair', { repair: MaterialCategory.REPAIR })
-      // Materials without a stock target aren't "missing" anything — hide them
       .andWhere('m.desiredQuantity > 0')
       .andWhere('p.id IS NULL');
     if (search) {
@@ -145,9 +139,6 @@ export class InventoryService {
       });
     }
     const [materials, total] = await qb
-      // Order by a named select alias: TypeORM's pagination-with-joins path
-      // treats dotted orderBy keys as alias.property, so raw arithmetic
-      // expressions (e.g. "(m.desired_quantity - m.current_stock)") break it
       .addSelect('m.desired_quantity - m.current_stock', 'deficit_calc')
       .orderBy('deficit_calc', 'DESC')
       .skip((page - 1) * limit)
@@ -173,7 +164,6 @@ export class InventoryService {
     return { items, total };
   }
 
-  /** Loads all claims for the given materials, grouped by material id */
   private async getClaimsByMaterial(
     materialIds: string[],
   ): Promise<Map<string, MaterialClaimSummary[]>> {
@@ -206,9 +196,6 @@ export class InventoryService {
     return this.mapToStockItem(mat);
   }
 
-  // ── Claims ──────────────────────────────────────────────────────────────
-
-  /** All claims across every material, newest first, with material context */
   async findAllClaims(): Promise<{ items: ClaimWithMaterial[]; total: number }> {
     const claims = await this.claimRepo.find({
       relations: ['material'],
@@ -233,7 +220,6 @@ export class InventoryService {
     return { items, total: items.length };
   }
 
-  /** Lists all claims for a material together with a deficit summary */
   async findClaims(materialId: string): Promise<{
     material: Pick<InventoryItemStock, 'id' | 'name' | 'currentStock' | 'desiredQuantity'>;
     deficit: number;
@@ -272,7 +258,6 @@ export class InventoryService {
     };
   }
 
-  /** Creates a claim: a person pledges to deliver a quantity of the material */
   async createClaim(materialId: string, dto: CreateClaimDto): Promise<MaterialClaimSummary> {
     const mat = await this.repo.findOne({ where: { id: materialId } });
     if (!mat) throw new NotFoundException(`Material "${materialId}" not found`);
@@ -301,10 +286,7 @@ export class InventoryService {
   }
 
   async ingest(dto: IngestDto): Promise<{ status: string; source: string }> {
-    // Forward the full plugin payload to the inventory-worker via RabbitMQ.
-    // The worker handles: flattening all player/retainer bags, summing by itemId,
-    // and updating both base_materials.current_stock and submarine_parts.stock.
-    this.rmqClient.emit('inventory_ingest', dto);
+    this.rmqClient.emit('inventory_ingest', createEnvelope(dto));
     return { status: 'accepted', source: dto.characterName ?? 'unknown' };
   }
 
@@ -312,7 +294,6 @@ export class InventoryService {
     const mat = await this.repo.findOne({ where: { id } });
     if (!mat) throw new NotFoundException(`Material "${id}" not found`);
 
-    // NPC-sourced items are always stocked to the max (target quantity)
     mat.currentStock =
       mat.whereToBuy === MaterialSource.NPC ? mat.desiredQuantity : dto.stock;
     const saved = await this.repo.save(mat);

@@ -102,9 +102,6 @@ describe('OrdersService — computeMissingMaterials', () => {
       modHull,
     ]);
 
-    // No intermediate part entries — only raw materials, and only for the
-    // units not already covered by the 1 Shark Hull in stock:
-    // iron needed = (2 hulls required - 1 covered) * 5 = 5 -> missing 2.
     expect(missing).toHaveLength(1);
     expect(missing[0]).toMatchObject({
       materialId: 'iron',
@@ -232,7 +229,6 @@ describe('OrdersService — computeAggregate', () => {
       [baseHull, modHull],
     );
 
-    // Part-as-material rows are resolved — no intermediate part entries.
     expect(agg.materials.find((m: any) => m.materialId === 'shark_hull')).toBeUndefined();
 
     const ironEntry = agg.materials.find((m: any) => m.materialId === 'iron');
@@ -276,7 +272,6 @@ describe('OrdersService — computePricing', () => {
       { part: part('b1', 'bow'), quantity: 1, unitPrice: 500 },
     ];
 
-    // Craftable count = 5 -> 15%-off tier (threshold 10) not met, 5% tier met
     expect((svc as any).computePricing(items, discounts)).toEqual({
       subtotal: 4500,
       discountPct: 5,
@@ -288,11 +283,9 @@ describe('OrdersService — computePricing', () => {
   it('counts only craftable part types toward discount tiers', () => {
     const items = [
       { part: part('h1', 'hull'), quantity: 3, unitPrice: 1000 },
-      // Repair kits ('Materials') never count toward the tier
       { part: part('kit', 'Materials'), quantity: 9, unitPrice: 100 },
     ];
 
-    // Craftable count = 3 -> below every tier
     expect((svc as any).computePricing(items, discounts)).toEqual({
       subtotal: 3900,
       discountPct: 0,

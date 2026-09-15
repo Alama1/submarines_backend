@@ -19,10 +19,8 @@ export class RandomizeOrderCodes1788600000000 implements MigrationInterface {
     name = 'RandomizeOrderCodes1788600000000'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
-        // 1. Widen the column for the new SUB-XXXX-XXXX-XXXX format (18 chars)
         await queryRunner.query(`ALTER TABLE "orders" ALTER COLUMN "order_code" TYPE varchar(24)`);
 
-        // 2. Randomize every existing code — the old short ones were guessable
         const orders: Array<{ id: string }> = await queryRunner.query(`SELECT "id" FROM "orders"`);
         const used = new Set<string>();
         for (const { id } of orders) {
@@ -36,6 +34,5 @@ export class RandomizeOrderCodes1788600000000 implements MigrationInterface {
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
-        // No-op: the original short codes cannot be restored (randomized on purpose)
     }
 }

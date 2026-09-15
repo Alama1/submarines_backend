@@ -1,10 +1,8 @@
-# Build context: monorepo root
-# Usage: docker build -f apps/price-worker/Dockerfile .
 FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@11.24.0 --activate
 
 # Workspace manifests & base tsconfig
 COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
@@ -17,6 +15,7 @@ COPY apps/price-worker/ ./apps/price-worker/
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @ff14/types build
 RUN pnpm --filter @ff14/entities build
+RUN pnpm --filter @ff14/internal-auth build
 RUN pnpm --filter @ff14/price-worker build
 
 # ── Production image ────────────────────────────────────────────
@@ -34,4 +33,5 @@ COPY --from=builder /app/apps/price-worker/dist ./apps/price-worker/dist
 COPY --from=builder /app/apps/price-worker/node_modules ./apps/price-worker/node_modules
 
 WORKDIR /app/apps/price-worker
+USER node
 CMD ["node", "dist/main.js"]
