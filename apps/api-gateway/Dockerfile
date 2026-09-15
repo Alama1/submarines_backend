@@ -35,5 +35,5 @@ COPY --from=builder /app/apps/api-gateway/node_modules ./apps/api-gateway/node_m
 WORKDIR /app/apps/api-gateway
 EXPOSE 3000
 USER node
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD wget -q --spider http://127.0.0.1:3000/api/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD wget -q --spider "http://127.0.0.1:${PORT:-3000}/api/health" || exit 1
 CMD ["node", "dist/main.js"]

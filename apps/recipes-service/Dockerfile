@@ -35,5 +35,5 @@ COPY --from=builder /app/apps/recipes-service/node_modules ./apps/recipes-servic
 WORKDIR /app/apps/recipes-service
 EXPOSE 3004
 USER node
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD wget -q --spider http://127.0.0.1:3004/api/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD wget -q --spider "http://127.0.0.1:${PORT:-3004}/api/health" || exit 1
 CMD ["node", "dist/main.js"]

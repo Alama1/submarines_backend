@@ -35,5 +35,5 @@ COPY --from=builder /app/apps/orders-service/node_modules ./apps/orders-service/
 WORKDIR /app/apps/orders-service
 EXPOSE 3003
 USER node
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD wget -q --spider http://127.0.0.1:3003/api/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD wget -q --spider "http://127.0.0.1:${PORT:-3003}/api/health" || exit 1
 CMD ["node", "dist/main.js"]

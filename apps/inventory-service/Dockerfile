@@ -35,5 +35,5 @@ COPY --from=builder /app/apps/inventory-service/node_modules ./apps/inventory-se
 WORKDIR /app/apps/inventory-service
 EXPOSE 3002
 USER node
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD wget -q --spider http://127.0.0.1:3002/api/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD wget -q --spider "http://127.0.0.1:${PORT:-3002}/api/health" || exit 1
 CMD ["node", "dist/main.js"]
