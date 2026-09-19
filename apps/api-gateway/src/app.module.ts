@@ -4,7 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheModule } from '@nestjs/cache-manager';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
-import { ApiKey } from '@ff14/entities';
+import { AllowedEmail, ApiKey } from '@ff14/entities';
 import { HealthController } from './health/health.controller';
 import { AuthModule } from './auth/auth.module';
 import { ProxyModule } from './proxy/proxy.module';
@@ -28,7 +28,7 @@ import { ProxyModule } from './proxy/proxy.module';
           database: cfg.get<string>('POSTGRES_DB', 'ff14_gateway'),
           username: cfg.get<string>('POSTGRES_USER', 'ff14'),
           password,
-          entities: [ApiKey],
+          entities: [ApiKey, AllowedEmail],
           migrations: [join(__dirname, '../../..', 'packages/entities/dist/migrations/*.js')],
           migrationsRun: true,
           namingStrategy: new SnakeNamingStrategy(),

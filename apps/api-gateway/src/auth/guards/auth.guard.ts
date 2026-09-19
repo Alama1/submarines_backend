@@ -15,6 +15,7 @@ import * as crypto from 'crypto';
 import { ApiKey } from '@ff14/entities';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { FirebaseService } from '../firebase.service';
+import { WhitelistService } from '../whitelist.service';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -24,6 +25,7 @@ export class AuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly config: ConfigService,
     private readonly firebaseService: FirebaseService,
+    private readonly whitelistService: WhitelistService,
     @InjectRepository(ApiKey)
     private readonly apiKeyRepo: Repository<ApiKey>,
   ) {}
@@ -78,13 +80,16 @@ export class AuthGuard implements CanActivate {
       try {
         const user = await this.firebaseService.verifyIdToken(token);
 
-        const allowedList = (this.config.get<string>('ALLOWED_EMAILS') ?? '')
+        // Whitelist = managed DB entries (admin panel) + legacy ALLOWED_EMAILS env var
+        const envList = (this.config.get<string>('ALLOWED_EMAILS') ?? '')
           .split(',')
           .map((e) => e.trim().toLowerCase())
           .filter(Boolean);
+        const dbList = await this.whitelistService.getCachedEmails();
+        const allowedList = new Set<string>([...envList, ...dbList]);
 
-        if (!allowedList.length) {
-          this.logger.error('ALLOWED_EMAILS is not configured — denying Firebase authentication');
+        if (!allowedList.size) {
+          this.logger.error('No whitelist configured (DB empty and ALLOWED_EMAILS unset) — denying Firebase authentication');
           throw new ForbiddenException('Firebase access is not configured on this server');
         }
         if (!user.email) {
@@ -93,8 +98,8 @@ export class AuthGuard implements CanActivate {
         if (!user.emailVerified) {
           throw new ForbiddenException('Token email is not verified');
         }
-        if (!allowedList.includes(user.email.toLowerCase())) {
-          this.logger.warn(`User ${user.email} not in ALLOWED_EMAILS list`);
+        if (!allowedList.has(user.email.toLowerCase())) {
+          this.logger.warn(`User ${user.email} is not whitelisted`);
           throw new ForbiddenException('User is not authorized to access this backend');
         }
 

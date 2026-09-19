@@ -29,7 +29,7 @@ async function bootstrap(): Promise<void> {
     throw new Error('INTERNAL_TOKEN env var is required');
   }
   if (!process.env.ALLOWED_EMAILS?.trim()) {
-    console.warn('[api-gateway] ALLOWED_EMAILS is not set — Firebase logins will be denied');
+    console.warn('[api-gateway] ALLOWED_EMAILS is not set — only DB-whitelisted emails can log in (manage via Settings → Login Whitelist)');
   }
 
   const app = await NestFactory.create<NestFastifyApplication>(
