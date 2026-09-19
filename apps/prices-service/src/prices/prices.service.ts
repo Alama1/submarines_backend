@@ -14,20 +14,31 @@ import { createEnvelope } from '@ff14/internal-auth';
 import {
   AppSetting,
   BaseMaterial,
+  computeCraftCosts,
+  effectivePriceOf,
   expandAllPartMaterials,
+  MaterialCostInfo,
   PartSet,
   PartSetItem,
   SubmarinePart,
 } from '@ff14/entities';
 import {
+  AnomalyThresholds,
+  ANOMALY_THRESHOLD_GIL_KEY,
+  ANOMALY_THRESHOLD_PCT_KEY,
   CreatePartSetDto,
+  MaterialIngredientCost,
   PartSetProfit,
+  PRICE_ANOMALY_THRESHOLD_PCT,
+  PriceAnomaliesResponse,
+  PriceAnomalyItem,
   UNIVERSALIS_WORLD_KEY,
   UniversalisSettings,
   UpdatePartSetDto,
 } from '@ff14/types';
 import { UpdatePriceDto } from './dto/update-price.dto';
 import { UpdateWorldDto } from './dto/update-world.dto';
+import { UpdateAnomalyThresholdsDto } from './dto/update-anomaly-thresholds.dto';
 
 export interface MaterialPriceItem {
   id: string;
@@ -97,6 +108,58 @@ export class PricesService {
     await this.cache.reset();
 
     return { world, source: 'database' };
+  }
+
+  private parseThreshold(raw: string | null | undefined): number | null {
+    const trimmed = raw?.trim();
+    if (!trimmed) return null;
+    const parsed = Number.parseInt(trimmed, 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+  }
+
+  async getAnomalyThresholds(): Promise<AnomalyThresholds> {
+    const rows = await this.settingRepo.find({
+      where: [
+        { key: ANOMALY_THRESHOLD_PCT_KEY },
+        { key: ANOMALY_THRESHOLD_GIL_KEY },
+      ],
+    });
+    const byKey = new Map(rows.map((r) => [r.key, r.value]));
+    // Key absent -> use the default; key present but blank -> explicitly disabled.
+    const pctRaw = byKey.get(ANOMALY_THRESHOLD_PCT_KEY);
+    return {
+      thresholdPct:
+        pctRaw === undefined
+          ? PRICE_ANOMALY_THRESHOLD_PCT
+          : this.parseThreshold(pctRaw),
+      thresholdGil: this.parseThreshold(byKey.get(ANOMALY_THRESHOLD_GIL_KEY)),
+    };
+  }
+
+  async updateAnomalyThresholds(
+    dto: UpdateAnomalyThresholdsDto,
+  ): Promise<AnomalyThresholds> {
+    const updates: Array<{ key: string; value: number | null }> = [];
+    if (dto.thresholdPct !== undefined) {
+      updates.push({ key: ANOMALY_THRESHOLD_PCT_KEY, value: dto.thresholdPct });
+    }
+    if (dto.thresholdGil !== undefined) {
+      updates.push({ key: ANOMALY_THRESHOLD_GIL_KEY, value: dto.thresholdGil });
+    }
+
+    for (const { key, value } of updates) {
+      const existing = await this.settingRepo.findOne({ where: { key } });
+      const stored = value === null ? '' : String(value);
+      if (existing) {
+        existing.value = stored;
+        await this.settingRepo.save(existing);
+      } else {
+        await this.settingRepo.insert({ key, value: stored });
+      }
+    }
+
+    await this.cache.reset();
+    return this.getAnomalyThresholds();
   }
 
   private mapToPriceItem(mat: BaseMaterial): MaterialPriceItem {
@@ -169,22 +232,119 @@ export class PricesService {
     return mat.myPrice ?? mat.marketPrice ?? mat.npcPrice ?? 0;
   }
 
-  private buildSetCostContext(allParts: SubmarinePart[]): {
-    costPerPart: Map<string, number>;
-  } {
-    const matById = new Map<string, BaseMaterial>();
-    for (const p of allParts) {
-      for (const pm of p.materials ?? []) {
-        if (pm.material) matById.set(pm.material.id, pm.material);
-      }
+  /**
+   * Craft-cost comparison for all craftable materials: computed craft cost
+   * (recursive, multi-tier, crystals included) vs the user's custom price.
+   * A row is flagged when it deviates beyond the configured thresholds:
+   * |diffPct| > thresholdPct OR |diff| > thresholdGil (null disables a check).
+   */
+  async findAnomalies(): Promise<PriceAnomaliesResponse> {
+    const [materials, thresholds] = await Promise.all([
+      this.repo.find(),
+      this.getAnomalyThresholds(),
+    ]);
+    const matById = new Map<string, BaseMaterial>(
+      materials.map((m) => [m.id, m]),
+    );
+    const costs = computeCraftCosts(matById);
+
+    const items: PriceAnomalyItem[] = [];
+    for (const mat of materials) {
+      if (!mat.recipe?.length) continue;
+      const info: MaterialCostInfo =
+        costs.get(mat.id) ?? { craftCost: 0, incomplete: false };
+
+      const ingredients: MaterialIngredientCost[] = mat.recipe
+        .map((row) => {
+          const ing = matById.get(row.ingredientMaterialId);
+          const buy = ing ? effectivePriceOf(ing) : 0;
+          const craft =
+            ing ? (costs.get(row.ingredientMaterialId)?.craftCost ?? 0) : 0;
+          const crafted = (ing?.recipe?.length ?? 0) > 0;
+          const unitCost =
+            buy > 0 && crafted
+              ? Math.min(buy, craft)
+              : crafted
+                ? craft
+                : buy;
+          return {
+            ingredientMaterialId: row.ingredientMaterialId,
+            name: ing?.name ?? 'Unknown',
+            quantity: row.quantity,
+            unitCost,
+            totalCost: unitCost * row.quantity,
+            crafted,
+          };
+        })
+        .sort((a, b) => b.totalCost - a.totalCost);
+
+      const diff =
+        mat.myPrice != null ? info.craftCost - mat.myPrice : null;
+      const diffPct =
+        diff != null && mat.myPrice ? (diff / mat.myPrice) * 100 : null;
+
+      const isAnomaly =
+        (thresholds.thresholdPct != null &&
+          diffPct != null &&
+          Math.abs(diffPct) > thresholds.thresholdPct) ||
+        (thresholds.thresholdGil != null &&
+          diff != null &&
+          Math.abs(diff) > thresholds.thresholdGil);
+
+      items.push({
+        id: mat.id,
+        name: mat.name,
+        itemId: mat.itemId,
+        myPrice: mat.myPrice,
+        marketPrice: mat.marketPrice,
+        whereToBuy: mat.whereToBuy,
+        craftCost: info.craftCost,
+        diff,
+        diffPct,
+        incomplete: info.incomplete,
+        isAnomaly,
+        ingredients,
+      });
     }
+
+    items.sort((a, b) => {
+      if (a.diffPct == null && b.diffPct == null) {
+        return b.craftCost - a.craftCost;
+      }
+      if (a.diffPct == null) return 1;
+      if (b.diffPct == null) return -1;
+      return Math.abs(b.diffPct) - Math.abs(a.diffPct);
+    });
+
+    const anomalyCount = items.filter((i) => i.isAnomaly).length;
+
+    return { items, total: items.length, anomalyCount, thresholds };
+  }
+
+  private async buildSetCostContext(allParts: SubmarinePart[]): Promise<{
+    costPerPart: Map<string, number>;
+  }> {
+    const materials = await this.repo.find();
+    const matById = new Map<string, BaseMaterial>(
+      materials.map((m) => [m.id, m]),
+    );
+    const costs = computeCraftCosts(matById);
     const expanded = expandAllPartMaterials(allParts);
+
+    // Effective price wins; fall back to computed craft cost when a
+    // craftable material has no price set at all (avoids silent 0-cost).
+    const unitCostOf = (mat: BaseMaterial | null | undefined): number => {
+      if (!mat) return 0;
+      const effective = effectivePriceOf(mat);
+      if (effective > 0) return effective;
+      return costs.get(mat.id)?.craftCost ?? 0;
+    };
 
     const costPerPart = new Map<string, number>();
     for (const p of allParts) {
       let cost = 0;
       for (const req of expanded.get(p.id) ?? []) {
-        cost += this.effectivePriceOf(matById.get(req.materialId)) * req.quantity;
+        cost += unitCostOf(matById.get(req.materialId)) * req.quantity;
       }
       costPerPart.set(p.id, cost);
     }
@@ -249,7 +409,7 @@ export class PricesService {
       this.setRepo.find({ order: { createdAt: 'ASC' } }),
       this.loadPartsForSets(),
     ]);
-    const ctx = this.buildSetCostContext(allParts);
+    const ctx = await this.buildSetCostContext(allParts);
     return { items: sets.map((s) => this.mapToProfit(s, ctx)), total: sets.length };
   }
 
@@ -279,7 +439,7 @@ export class PricesService {
         throw err;
       });
 
-    const ctx = this.buildSetCostContext(allParts);
+    const ctx = await this.buildSetCostContext(allParts);
     return this.mapToProfit(saved, ctx);
   }
 
@@ -317,7 +477,7 @@ export class PricesService {
         throw err;
       });
 
-    const ctx = this.buildSetCostContext(allParts);
+    const ctx = await this.buildSetCostContext(allParts);
     return this.mapToProfit(updated, ctx);
   }
 

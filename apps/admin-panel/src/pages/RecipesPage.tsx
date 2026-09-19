@@ -51,6 +51,9 @@ export const RecipesPage: React.FC = () => {
   const [npcPrice, setNpcPrice] = useState<number | ''>('');
   const [whereToBuy, setWhereToBuy] = useState<MaterialSource>('Market');
   const [matCategory, setMatCategory] = useState<MaterialCategory>('crafting');
+  const [matIngredients, setMatIngredients] = useState<
+    Array<{ ingredientMaterialId: string; quantity: number }>
+  >([]);
   const [matError, setMatError] = useState<string | null>(null);
   const [matSuccess, setMatSuccess] = useState<string | null>(null);
 
@@ -114,6 +117,7 @@ export const RecipesPage: React.FC = () => {
     onSuccess: (saved) => {
       queryClient.invalidateQueries({ queryKey: ['materials'] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['price-anomalies'] });
       setMatSuccess(`Saved material "${saved?.name ?? matName}" successfully!`);
       setMatError(null);
       setTimeout(() => {
@@ -221,6 +225,17 @@ export const RecipesPage: React.FC = () => {
     setPartMaterials(partMaterials.filter((_, i) => i !== idx));
   };
 
+  const addMatIngredientRow = () => {
+    const first = allMaterials.find((m) => m.id !== selectedMat?.id);
+    if (first) {
+      setMatIngredients([...matIngredients, { ingredientMaterialId: first.id, quantity: 1 }]);
+    }
+  };
+
+  const removeMatIngredientRow = (idx: number) => {
+    setMatIngredients(matIngredients.filter((_, i) => i !== idx));
+  };
+
   const handlePartSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPartError(null);
@@ -250,6 +265,7 @@ export const RecipesPage: React.FC = () => {
     setNpcPrice('');
     setWhereToBuy('Market');
     setMatCategory('crafting');
+    setMatIngredients([]);
     setMatError(null);
     setMatSuccess(null);
     setIsEditingMat(true);
@@ -264,6 +280,12 @@ export const RecipesPage: React.FC = () => {
     setNpcPrice(mat.npcPrice ?? '');
     setWhereToBuy(mat.whereToBuy || 'Market');
     setMatCategory(mat.category || 'crafting');
+    setMatIngredients(
+      (mat.recipe ?? []).map((ri: any) => ({
+        ingredientMaterialId: ri.ingredientMaterialId,
+        quantity: ri.quantity,
+      }))
+    );
     setMatError(null);
     setMatSuccess(null);
     setIsEditingMat(true);
@@ -278,12 +300,25 @@ export const RecipesPage: React.FC = () => {
       desiredQuantity: Number(desiredQuantity),
       whereToBuy,
       category: matCategory,
+      ingredients: matIngredients.map((ri) => ({
+        ingredientMaterialId: ri.ingredientMaterialId,
+        quantity: Number(ri.quantity),
+      })),
     };
     if (matItemId !== '') payload.itemId = Number(matItemId);
     if (myPrice !== '') payload.myPrice = Number(myPrice);
     if (npcPrice !== '') payload.npcPrice = Number(npcPrice);
     saveMatMutation.mutate(payload);
   };
+
+  // Approximate craft cost from current buy prices (flat, one level deep)
+  const craftPreviewCost = matIngredients.reduce((sum, ri) => {
+    const ing = allMaterials.find((m) => m.id === ri.ingredientMaterialId);
+    const unit = ing ? (ing.myPrice ?? ing.marketPrice ?? ing.npcPrice ?? 0) : 0;
+    return sum + unit * (Number(ri.quantity) || 0);
+  }, 0);
+
+  const craftIngredientOptions = allMaterials.filter((m) => m.id !== selectedMat?.id);
 
   return (
     <div className="space-y-6">
@@ -721,6 +756,17 @@ export const RecipesPage: React.FC = () => {
                                   Repair
                                 </span>
                               )}
+                              {(mat.recipe?.length ?? 0) > 0 && (
+                                <span
+                                  className="px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-semibold uppercase tracking-wide flex items-center gap-0.5"
+                                  title={`Crafted from ${(mat.recipe ?? [])
+                                    .map((ri: any) => `${ri.ingredient?.name ?? '?'} x${ri.quantity}`)
+                                    .join(', ')}`}
+                                >
+                                  <Hammer className="w-2.5 h-2.5" />
+                                  Craft
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td className="px-4 py-3 font-mono text-slate-400">
@@ -890,6 +936,85 @@ export const RecipesPage: React.FC = () => {
                     <option value="crafting">Crafting Material</option>
                     <option value="repair">Repair Supply (separate section)</option>
                   </select>
+                </div>
+
+                {/* Crafting Recipe (optional) */}
+                <div className="pt-3 border-t border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-slate-700 font-semibold">
+                      Crafting Recipe
+                      <span className="text-[10px] text-slate-400 font-normal ml-1.5">
+                        (ingredients per 1 crafted)
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={addMatIngredientRow}
+                      disabled={craftIngredientOptions.length === 0}
+                      className="text-xs text-emerald-600 hover:text-emerald-700 font-medium disabled:opacity-40"
+                    >
+                      + Add Ingredient
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {matIngredients.map((ri, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <select
+                          value={ri.ingredientMaterialId}
+                          onChange={(e) => {
+                            const updated = [...matIngredients];
+                            updated[idx].ingredientMaterialId = e.target.value;
+                            setMatIngredients(updated);
+                          }}
+                          className="flex-1 px-2 py-1.5 bg-white border border-slate-300 rounded text-xs text-slate-900"
+                        >
+                          {craftIngredientOptions.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          min="1"
+                          value={ri.quantity}
+                          onChange={(e) => {
+                            const updated = [...matIngredients];
+                            updated[idx].quantity = parseInt(e.target.value) || 1;
+                            setMatIngredients(updated);
+                          }}
+                          className="w-16 px-2 py-1.5 bg-white border border-slate-300 rounded text-xs text-slate-900 font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeMatIngredientRow(idx)}
+                          className="text-slate-400 hover:text-rose-600 p-1"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    {matIngredients.length === 0 && (
+                      <p className="text-[11px] text-slate-400 italic">
+                        Not crafted. Add ingredients (raw mats &amp; crystals) to define a craft recipe.
+                      </p>
+                    )}
+                  </div>
+
+                  {matIngredients.length > 0 && (
+                    <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                      <p className="text-[11px] text-slate-600">
+                        Approx. craft cost (buy prices):{' '}
+                        <span className="font-mono font-bold text-emerald-600">
+                          {formatGil(craftPreviewCost)}
+                        </span>
+                      </p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        Full multi-tier costing is validated in Price Management → Price Anomalies.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-3">

@@ -9,6 +9,7 @@ import * as crypto from 'crypto';
 import {
   BaseMaterial,
   BulkDiscount,
+  computeCraftCosts,
   expandAllPartMaterials,
   ExpandedMaterialRequirement,
   Order,
@@ -159,12 +160,11 @@ export class OrdersService {
     const partsByName = new Map<string, SubmarinePart>(
       allParts.map((p) => [p.name.toLowerCase(), p]),
     );
-    const matById = new Map<string, BaseMaterial>();
-    for (const p of allParts) {
-      for (const pm of p.materials ?? []) {
-        if (pm.material) matById.set(pm.material.id, pm.material);
-      }
-    }
+    const allMaterials = await this.ds.getRepository(BaseMaterial).find();
+    const matById = new Map<string, BaseMaterial>(
+      allMaterials.map((m) => [m.id, m]),
+    );
+    const craftCosts = computeCraftCosts(matById);
     const expanded = expandAllPartMaterials(allParts);
 
     const costPerPart = new Map<string, number>();
@@ -172,7 +172,11 @@ export class OrdersService {
       let cost = 0;
       for (const req of expanded.get(p.id) ?? []) {
         const mat = matById.get(req.materialId);
-        const unit = mat ? (mat.myPrice ?? mat.marketPrice ?? mat.npcPrice ?? 0) : 0;
+        let unit = mat ? (mat.myPrice ?? mat.marketPrice ?? mat.npcPrice ?? 0) : 0;
+        // Fall back to computed craft cost when a craftable material has no price set
+        if (mat && unit <= 0) {
+          unit = craftCosts.get(mat.id)?.craftCost ?? 0;
+        }
         cost += unit * req.quantity;
       }
       costPerPart.set(p.id, cost);

@@ -5,7 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CacheModule } from '@nestjs/cache-manager';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
-import { AppSetting, BaseMaterial, PartMaterial, SubmarinePart } from '@ff14/entities';
+import { AppSetting, BaseMaterial, MaterialIngredient, PartMaterial, SubmarinePart } from '@ff14/entities';
 import { UniversalisModule } from './universalis/universalis.module';
 import { JobsModule } from './jobs/jobs.module';
 
@@ -29,7 +29,7 @@ import { JobsModule } from './jobs/jobs.module';
           database: cfg.get<string>('POSTGRES_DB', 'ff14_db'),
           username: cfg.get<string>('POSTGRES_USER', 'ff14'),
           password,
-          entities: [AppSetting, BaseMaterial, PartMaterial, SubmarinePart],
+          entities: [AppSetting, BaseMaterial, MaterialIngredient, PartMaterial, SubmarinePart],
           migrations: [join(__dirname, '../../..', 'packages/entities/dist/migrations/*.js')],
           migrationsRun: true,
           namingStrategy: new SnakeNamingStrategy(),

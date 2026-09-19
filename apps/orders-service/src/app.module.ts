@@ -8,6 +8,7 @@ import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { InternalTokenGuard } from '@ff14/internal-auth';
 import {
   BaseMaterial,
+  MaterialIngredient,
   PartMaterial,
   SubmarinePart,
   Order,
@@ -37,7 +38,7 @@ import { OrdersModule } from './orders/orders.module';
           database: cfg.get<string>('POSTGRES_DB', 'ff14_db'),
           username: cfg.get<string>('POSTGRES_USER', 'ff14'),
           password,
-          entities: [BaseMaterial, PartMaterial, SubmarinePart, Order, OrderItem, BulkDiscount],
+          entities: [BaseMaterial, MaterialIngredient, PartMaterial, SubmarinePart, Order, OrderItem, BulkDiscount],
           migrations: [join(__dirname, '../../..', 'packages/entities/dist/migrations/*.js')],
           migrationsRun: true,
           namingStrategy: new SnakeNamingStrategy(),

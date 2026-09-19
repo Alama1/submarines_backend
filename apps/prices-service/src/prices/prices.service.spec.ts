@@ -46,6 +46,7 @@ describe('PricesService', () => {
       }),
       findOne: jest.fn().mockResolvedValue({ ...mockMaterial }),
       save: jest.fn().mockImplementation((entity) => Promise.resolve(entity)),
+      find: jest.fn().mockResolvedValue([]),
     };
 
     cache = {
@@ -57,6 +58,7 @@ describe('PricesService', () => {
     };
 
     settingRepo = {
+      find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn().mockResolvedValue(null),
       save: jest.fn().mockImplementation((entity) => Promise.resolve(entity)),
       insert: jest.fn().mockResolvedValue(undefined),
@@ -206,6 +208,7 @@ describe('PricesService', () => {
     };
 
     it('should compute set profit from live effective prices via expanded recipes', async () => {
+      repo.find.mockResolvedValue([iron]);
       partRepo.find.mockResolvedValue([hull, stern]);
       setRepo.find.mockResolvedValue([fullSet]);
 
@@ -235,6 +238,7 @@ describe('PricesService', () => {
 
     it('should prefer myPrice override when valuing materials', async () => {
       (iron as any).myPrice = 20;
+      repo.find.mockResolvedValue([iron]);
       partRepo.find.mockResolvedValue([hull, stern]);
       setRepo.find.mockResolvedValue([fullSet]);
 
@@ -246,6 +250,7 @@ describe('PricesService', () => {
     });
 
     it('should create a set and verify referenced parts exist', async () => {
+      repo.find.mockResolvedValue([iron]);
       partRepo.find.mockResolvedValue([hull]);
       const em = {
         create: jest.fn((_cls: any, data: any) => data),
@@ -299,6 +304,136 @@ describe('PricesService', () => {
     it('should throw when deleting a missing set', async () => {
       setRepo.delete.mockResolvedValueOnce({ affected: 0 });
       await expect(service.deleteSet('nope')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('Price anomalies', () => {
+    const ore = {
+      id: 'ore',
+      name: 'Iron Ore',
+      marketPrice: 100,
+      myPrice: null,
+      npcPrice: null,
+      recipe: [],
+    } as unknown as BaseMaterial;
+    const shard = {
+      id: 'shard',
+      name: 'Fire Shard',
+      marketPrice: 10,
+      myPrice: null,
+      npcPrice: null,
+      recipe: [],
+    } as unknown as BaseMaterial;
+    const ingot = {
+      id: 'ingot',
+      name: 'Iron Ingot',
+      marketPrice: 400,
+      myPrice: 300,
+      npcPrice: null,
+      recipe: [
+        { ingredientMaterialId: 'ore', quantity: 2 },
+        { ingredientMaterialId: 'shard', quantity: 5 },
+      ],
+    } as unknown as BaseMaterial;
+
+    it('should compare craft cost against custom prices', async () => {
+      repo.find.mockResolvedValue([ore, shard, ingot]);
+
+      const res = await service.findAnomalies();
+
+      expect(res.total).toBe(1);
+      const item = res.items[0];
+      expect(item.id).toBe('ingot');
+      expect(item.craftCost).toBe(250); // 2*100 + 5*10
+      expect(item.diff).toBe(-50); // craft cheaper than custom price
+      expect(Math.abs(item.diffPct!)).toBeCloseTo(16.67, 1);
+      expect(item.incomplete).toBe(false);
+      expect(item.isAnomaly).toBe(true);
+      expect(res.anomalyCount).toBe(1);
+      expect(res.thresholds).toEqual({ thresholdPct: 10, thresholdGil: null });
+    });
+
+    it('should honour a custom % threshold and a gil threshold (OR logic)', async () => {
+      repo.find.mockResolvedValue([ore, shard, ingot]);
+
+      // % set to 90 (16.67% dev is below it) but gil set to 40 (|diff|=50 is above it)
+      settingRepo.find.mockResolvedValue([
+        { key: 'anomalies.thresholdPct', value: '90' },
+        { key: 'anomalies.thresholdGil', value: '40' },
+      ]);
+
+      const res = await service.findAnomalies();
+
+      expect(res.thresholds).toEqual({ thresholdPct: 90, thresholdGil: 40 });
+      expect(res.items[0].isAnomaly).toBe(true); // flagged via the gil check
+      expect(res.anomalyCount).toBe(1);
+    });
+
+    it('should not flag when both thresholds are disabled', async () => {
+      repo.find.mockResolvedValue([ore, shard, ingot]);
+      settingRepo.find.mockResolvedValue([
+        { key: 'anomalies.thresholdPct', value: '' },
+        { key: 'anomalies.thresholdGil', value: '' },
+      ]);
+
+      const res = await service.findAnomalies();
+
+      expect(res.thresholds).toEqual({ thresholdPct: null, thresholdGil: null });
+      expect(res.items[0].isAnomaly).toBe(false);
+      expect(res.anomalyCount).toBe(0);
+    });
+
+    it('should save thresholds and clear caches', async () => {
+      const store = new Map<string, string>();
+      settingRepo.find.mockImplementation(async () =>
+        [...store.entries()].map(([key, value]) => ({ key, value })),
+      );
+      settingRepo.findOne.mockImplementation(async ({ where }: any) =>
+        store.has(where.key)
+          ? { key: where.key, value: store.get(where.key) }
+          : null,
+      );
+      settingRepo.insert.mockImplementation(async ({ key, value }: any) => {
+        store.set(key, value);
+      });
+      settingRepo.save.mockImplementation(async (entity: any) => {
+        store.set(entity.key, entity.value);
+        return entity;
+      });
+
+      const res = await service.updateAnomalyThresholds({
+        thresholdPct: 5,
+        thresholdGil: null,
+      });
+
+      expect(settingRepo.insert).toHaveBeenCalledWith({
+        key: 'anomalies.thresholdPct',
+        value: '5',
+      });
+      expect(settingRepo.insert).toHaveBeenCalledWith({
+        key: 'anomalies.thresholdGil',
+        value: '',
+      });
+      expect(cache.reset).toHaveBeenCalled();
+      expect(res).toEqual({ thresholdPct: 5, thresholdGil: null });
+    });
+
+    it('should mark craft costs as incomplete when an ingredient has no price', async () => {
+      const unpricedOre = { ...ore, marketPrice: null };
+      repo.find.mockResolvedValue([unpricedOre, shard, ingot]);
+
+      const res = await service.findAnomalies();
+
+      expect(res.items[0].incomplete).toBe(true);
+      expect(res.items[0].craftCost).toBe(50); // only the priced shards count
+    });
+
+    it('should skip materials without craft recipes', async () => {
+      repo.find.mockResolvedValue([ore, shard]);
+
+      const res = await service.findAnomalies();
+
+      expect(res.total).toBe(0);
     });
   });
 });

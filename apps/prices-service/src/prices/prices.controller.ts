@@ -15,6 +15,7 @@ import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { PricesService } from './prices.service';
 import { UpdatePriceDto } from './dto/update-price.dto';
 import { UpdateWorldDto } from './dto/update-world.dto';
+import { UpdateAnomalyThresholdsDto } from './dto/update-anomaly-thresholds.dto';
 import { CreatePartSetDto } from './dto/create-set.dto';
 import { UpdatePartSetDto } from './dto/update-set.dto';
 
@@ -70,6 +71,23 @@ export class PricesController {
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteSet(@Param('id') id: string) {
     return this.svc.deleteSet(id);
+  }
+
+  @Get('anomalies/settings')
+  getAnomalyThresholds() {
+    return this.svc.getAnomalyThresholds();
+  }
+
+  @Put('anomalies/settings')
+  updateAnomalyThresholds(@Body() dto: UpdateAnomalyThresholdsDto) {
+    return this.svc.updateAnomalyThresholds(dto);
+  }
+
+  @Get('anomalies')
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(300)
+  findAnomalies() {
+    return this.svc.findAnomalies();
   }
 
   @Get(':id')

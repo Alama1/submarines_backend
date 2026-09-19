@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsEnum,
   IsInt,
   IsNotEmpty,
@@ -6,9 +7,21 @@ import {
   IsString,
   Min,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { MaterialCategory, MaterialSource } from '@ff14/entities';
+
+export class MaterialIngredientInputDto {
+  @IsString()
+  @IsNotEmpty()
+  ingredientMaterialId: string;
+
+  @IsInt()
+  @Min(1)
+  @Type(() => Number)
+  quantity: number;
+}
 
 export class CreateMaterialDto {
   @IsString()
@@ -49,4 +62,10 @@ export class CreateMaterialDto {
   @IsOptional()
   @IsEnum(MaterialCategory)
   category?: MaterialCategory;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MaterialIngredientInputDto)
+  ingredients?: MaterialIngredientInputDto[];
 }

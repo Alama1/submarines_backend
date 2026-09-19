@@ -7,6 +7,7 @@ import {
 } from 'typeorm';
 import { PartMaterial } from './part-material.entity';
 import { MaterialCategory, MaterialSource } from './material-enums';
+import { MaterialIngredient } from './material-ingredient.entity';
 
 @Entity('base_materials')
 export class BaseMaterial {
@@ -55,5 +56,16 @@ export class BaseMaterial {
 
   @OneToMany(() => PartMaterial, (pm) => pm.material)
   partMaterials: PartMaterial[];
+
+  /**
+   * Craft recipe rows: this material is crafted from `recipe[].ingredient`.
+   * Empty when the material is not craftable (bought/NPC only).
+   */
+  @OneToMany(() => MaterialIngredient, (mi) => mi.material, { eager: true })
+  recipe: MaterialIngredient[];
+
+  /** Materials that are crafted from this one. */
+  @OneToMany(() => MaterialIngredient, (mi) => mi.ingredient)
+  usedIn: MaterialIngredient[];
 }
 
