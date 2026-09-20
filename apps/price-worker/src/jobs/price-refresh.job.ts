@@ -24,7 +24,8 @@ export class PriceRefreshJob {
     @Optional() @Inject(CACHE_MANAGER) private readonly cache?: Cache,
   ) {}
 
-  @Cron('0 */5 * * * *')
+  /** Hourly Universalis sync (top of every hour). */
+  @Cron('0 0 * * * *')
   async handleCron(): Promise<void> {
     this.logger.log('Starting scheduled Universalis price refresh...');
     await this.runRefresh();
@@ -69,6 +70,8 @@ export class PriceRefreshJob {
 
       this.logger.log(`Found ${materials.length} materials with itemId to sync (world: "${world}").`);
 
+      // The aggregated endpoint handles large batches cheaply (single
+      // request for the whole catalogue); 50 keeps URLs modest anyway.
       const chunkSize = 50;
       const chunks: BaseMaterial[][] = [];
       for (let i = 0; i < materials.length; i += chunkSize) {

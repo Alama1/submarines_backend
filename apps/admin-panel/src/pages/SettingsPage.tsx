@@ -177,18 +177,19 @@ export const SettingsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Universalis world card */}
+      {/* Universalis market scope card */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
-        <div className="flex items-center gap-2 text-emerald-600 font-semibold text-sm">
-          <Globe className="w-4 h-4" />
-          <span>Universalis In-Game World</span>
-        </div>
+          <div className="flex items-center gap-2 text-emerald-600 font-semibold text-sm">
+            <Globe className="w-4 h-4" />
+            <span>Universalis Market Region</span>
+          </div>
         <p className="text-xs text-slate-500 leading-relaxed">
-          Market prices are synced from this world every 5 minutes (and on manual
-          "Sync Universalis"). Changing it applies from the next sync.
+          Synced prices are the cheapest NQ listing within this region (europe, north-america
+          or japan). Prices are synced once per hour (and on manual "Sync Universalis").
+          Changing it applies from the next sync.
           {data?.source === 'default' && (
             <span className="ml-1 text-amber-600">
-              Currently using the default value — no custom world saved yet.
+              Currently using the default value — no custom region saved yet.
             </span>
           )}
         </p>
@@ -200,9 +201,15 @@ export const SettingsPage: React.FC = () => {
             disabled={isLoading}
             value={world}
             onChange={(e) => setWorld(e.target.value)}
-            placeholder="e.g. Louisoix"
+            placeholder="europe, north-america or japan"
+            list="universalis-scope-suggestions"
             className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 font-mono placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
           />
+          <datalist id="universalis-scope-suggestions">
+            <option value="europe">Europe</option>
+            <option value="north-america">North America</option>
+            <option value="japan">Japan</option>
+          </datalist>
           <button
             type="submit"
             disabled={saveWorldMutation.isPending || !world.trim() || world.trim() === data?.world}
@@ -216,7 +223,7 @@ export const SettingsPage: React.FC = () => {
             ) : (
               <>
                 <Save className="w-3.5 h-3.5" />
-                <span>{saveWorldMutation.isPending ? 'Saving...' : 'Save World'}</span>
+                <span>{saveWorldMutation.isPending ? 'Saving...' : 'Save Region'}</span>
               </>
             )}
           </button>

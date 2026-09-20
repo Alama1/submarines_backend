@@ -1,14 +1,26 @@
 ﻿import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-export interface UniversalisItemPrice {
-  itemID?: number;
-  minPrice?: number;
-  minPriceNQ?: number;
-  minPriceHQ?: number;
-  currentAveragePrice?: number;
-  currentAveragePriceNQ?: number;
-  currentAveragePriceHQ?: number;
+export interface UniversalisAggregatedPrice {
+  price: number;
+  worldId?: number;
+}
+
+export interface UniversalisAggregatedItem {
+  itemId: number;
+  nq?: {
+    minListing?: {
+      world?: UniversalisAggregatedPrice;
+      dc?: UniversalisAggregatedPrice;
+      region?: UniversalisAggregatedPrice;
+    };
+  };
+  hq?: unknown;
+}
+
+export interface UniversalisAggregatedResponse {
+  results?: UniversalisAggregatedItem[];
+  failedItems?: number[];
 }
 
 @Injectable()
@@ -31,42 +43,33 @@ export class UniversalisClient {
 
     const world = worldOverride?.trim() || this.getWorld();
     const joinedIds = itemIds.join(',');
-    const url = `${this.baseUrl}/${encodeURIComponent(world)}/${joinedIds}`;
+    // The aggregated endpoint serves pre-computed world/DC/region stats —
+    // cheap enough to batch hundreds of items in a single request, unlike
+    // the raw market-board endpoint which times out beyond a few.
+    const url = `${this.baseUrl}/aggregated/${encodeURIComponent(world)}/${joinedIds}`;
 
     try {
-      this.logger.debug(`Fetching Universalis prices for ${itemIds.length} items from world "${world}"...`);
+      this.logger.debug(`Fetching Universalis aggregated prices for ${itemIds.length} items (scope: "${world}")...`);
       const res = await fetch(url, {
         headers: { 'User-Agent': 'FF14-Submarines-Backend/1.0' },
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(30_000),
       });
 
       if (!res.ok) {
-        this.logger.warn(`Universalis API returned HTTP ${res.status} for world ${world}`);
+        this.logger.warn(`Universalis API returned HTTP ${res.status} for scope ${world}`);
         return priceMap;
       }
 
-      const data = (await res.json()) as {
-        items?: Record<string, UniversalisItemPrice>;
-        itemID?: number;
-        minPrice?: number;
-        minPriceNQ?: number;
-        currentAveragePriceNQ?: number;
-        currentAveragePrice?: number;
-      };
+      const data = (await res.json()) as UniversalisAggregatedResponse;
 
-      if (data.items) {
-        for (const [idStr, itemData] of Object.entries(data.items)) {
-          const itemId = parseInt(idStr, 10);
-          const price = this.extractPrice(itemData);
-          if (price !== null) {
-            priceMap.set(itemId, price);
-          }
-        }
-      } else if (data.itemID) {
-        const price = this.extractPrice(data);
+      for (const item of data.results ?? []) {
+        const price = this.extractPrice(item);
         if (price !== null) {
-          priceMap.set(data.itemID, price);
+          priceMap.set(item.itemId, price);
         }
+      }
+      if (data.failedItems?.length) {
+        this.logger.warn(`Universalis could not aggregate items: ${data.failedItems.join(', ')}`);
       }
     } catch (err: unknown) {
       this.logger.error(`Failed to fetch Universalis prices: ${(err as Error).message}`, (err as Error).stack);
@@ -75,8 +78,16 @@ export class UniversalisClient {
     return priceMap;
   }
 
-  private extractPrice(item: UniversalisItemPrice): number | null {
-    const raw = item.minPriceNQ ?? item.minPrice ?? item.currentAveragePriceNQ ?? item.currentAveragePrice;
+  /**
+   * Region-wide cheapest NQ listing, falling back to DC, then the scope's
+   * own world price when region data is unavailable.
+   */
+  private extractPrice(item: UniversalisAggregatedItem): number | null {
+    const minListing = item.nq?.minListing;
+    const raw =
+      minListing?.region?.price ??
+      minListing?.dc?.price ??
+      minListing?.world?.price;
     if (raw === undefined || raw === null || Number.isNaN(raw)) return null;
     return Math.round(raw);
   }
