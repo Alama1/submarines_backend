@@ -6,16 +6,23 @@ export interface UniversalisAggregatedPrice {
   worldId?: number;
 }
 
+export interface UniversalisQualityStats {
+  minListing?: {
+    world?: UniversalisAggregatedPrice;
+    dc?: UniversalisAggregatedPrice;
+    region?: UniversalisAggregatedPrice;
+  };
+  averageSalePrice?: {
+    world?: UniversalisAggregatedPrice;
+    dc?: UniversalisAggregatedPrice;
+    region?: UniversalisAggregatedPrice;
+  };
+}
+
 export interface UniversalisAggregatedItem {
   itemId: number;
-  nq?: {
-    minListing?: {
-      world?: UniversalisAggregatedPrice;
-      dc?: UniversalisAggregatedPrice;
-      region?: UniversalisAggregatedPrice;
-    };
-  };
-  hq?: unknown;
+  nq?: UniversalisQualityStats;
+  hq?: UniversalisQualityStats;
 }
 
 export interface UniversalisAggregatedResponse {
@@ -79,16 +86,35 @@ export class UniversalisClient {
   }
 
   /**
-   * Region-wide cheapest NQ listing, falling back to DC, then the scope's
-   * own world price when region data is unavailable.
+   * Region average sale price, taking the cheaper of NQ/HQ. When an item has
+   * no (recent) sales history the chain degrades to the cheaper NQ/HQ region
+   * min listing, then DC, then the scope's own world.
    */
   private extractPrice(item: UniversalisAggregatedItem): number | null {
-    const minListing = item.nq?.minListing;
-    const raw =
-      minListing?.region?.price ??
-      minListing?.dc?.price ??
-      minListing?.world?.price;
-    if (raw === undefined || raw === null || Number.isNaN(raw)) return null;
-    return Math.round(raw);
+    const levels: Array<'region' | 'dc' | 'world'> = ['region', 'dc', 'world'];
+    for (const level of levels) {
+      const avg = pickLower(
+        item.nq?.averageSalePrice?.[level]?.price,
+        item.hq?.averageSalePrice?.[level]?.price,
+      );
+      if (avg !== null) return Math.round(avg);
+
+      const min = pickLower(
+        item.nq?.minListing?.[level]?.price,
+        item.hq?.minListing?.[level]?.price,
+      );
+      if (min !== null) return Math.round(min);
+    }
+    return null;
   }
+}
+
+function pickLower(
+  a: number | undefined | null,
+  b: number | undefined | null,
+): number | null {
+  const values = [a, b].filter(
+    (v): v is number => v !== undefined && v !== null && !Number.isNaN(v),
+  );
+  return values.length ? Math.min(...values) : null;
 }

@@ -38,11 +38,21 @@ describe('UniversalisClient', () => {
         results: [
           {
             itemId: 2,
-            nq: { minListing: { world: { price: 45 }, dc: { price: 42 }, region: { price: 36 } } },
+            nq: {
+              minListing: { world: { price: 45 }, dc: { price: 42 }, region: { price: 36 } },
+              averageSalePrice: { world: { price: 50.4 }, dc: { price: 55.1 }, region: { price: 663.375 } },
+            },
+            hq: {
+              minListing: { region: { price: 30 } },
+              averageSalePrice: { region: { price: 500 } },
+            },
           },
           {
             itemId: 3,
-            nq: { minListing: { dc: { price: 40 } } },
+            nq: {
+              minListing: { dc: { price: 40 } },
+              averageSalePrice: { dc: { price: 44.2 } },
+            },
           },
           {
             itemId: 4,
@@ -56,9 +66,9 @@ describe('UniversalisClient', () => {
 
     const map = await client.fetchMarketPrices([2, 3, 4], 'japan');
 
-    expect(map.get(2)).toBe(36); // region price wins
-    expect(map.get(3)).toBe(40); // falls back to dc when region missing
-    expect(map.get(4)).toBe(12); // falls back to world
+    expect(map.get(2)).toBe(500); // region average, lower of HQ (500) / NQ (663.375)
+    expect(map.get(3)).toBe(44); // no region data -> dc average
+    expect(map.get(4)).toBe(12); // no sales history -> min listing chain
     const calledUrl = mockFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain('/aggregated/japan/2,3,4');
   });
