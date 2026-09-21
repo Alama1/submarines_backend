@@ -1,0 +1,29 @@
+name: rabbitmq
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-ff14}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:?RABBITMQ_PASS is required}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - submarines
+    labels:
+      - com.centurylinkfoundation.watchtower.enable=true
+
+volumes:
+  rabbitmq_data:
+    name: submarines_rabbitmq_data
+
+networks:
+  submarines:
+    external: true

@@ -1,0 +1,25 @@
+name: orders-service
+
+x-app-env: &app-env
+  POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+  POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+  POSTGRES_DB: ${POSTGRES_DB:-ff14_db}
+  POSTGRES_USER: ${POSTGRES_USER:-ff14}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+  RABBITMQ_URL: amqp://${RABBITMQ_USER:-ff14}:${RABBITMQ_PASS:?RABBITMQ_PASS is required}@rabbitmq:5672
+  INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN is required}
+
+services:
+  orders-service:
+    image: ghcr.io/${IMAGE_PREFIX:-user/submarines}-orders-service:latest
+    container_name: orders-service
+    restart: unless-stopped
+    environment: *app-env
+    networks:
+      - submarines
+    labels:
+      - com.centurylinkfoundation.watchtower.enable=true
+
+networks:
+  submarines:
+    external: true

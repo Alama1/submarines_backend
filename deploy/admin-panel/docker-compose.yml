@@ -1,0 +1,26 @@
+name: admin-panel
+
+services:
+  admin-panel:
+    image: ghcr.io/${IMAGE_PREFIX:-user/submarines}-admin-panel:latest
+    container_name: admin-panel
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      API_GATEWAY_HOST: ${API_GATEWAY_HOST:-api-gateway}
+      API_GATEWAY_PORT: ${API_GATEWAY_PORT:-3000}
+      FIREBASE_API_KEY: ${FIREBASE_API_KEY:-}
+      FIREBASE_AUTH_DOMAIN: ${FIREBASE_AUTH_DOMAIN:-}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_STORAGE_BUCKET: ${FIREBASE_STORAGE_BUCKET:-}
+      FIREBASE_MESSAGING_SENDER_ID: ${FIREBASE_MESSAGING_SENDER_ID:-}
+      FIREBASE_APP_ID: ${FIREBASE_APP_ID:-}
+    networks:
+      - submarines
+    labels:
+      - com.centurylinkfoundation.watchtower.enable=true
+
+networks:
+  submarines:
+    external: true

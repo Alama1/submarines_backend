@@ -1,0 +1,24 @@
+name: recipes-service
+
+x-app-env: &app-env
+  POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+  POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+  POSTGRES_DB: ${POSTGRES_DB:-ff14_db}
+  POSTGRES_USER: ${POSTGRES_USER:-ff14}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+  INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN is required}
+
+services:
+  recipes-service:
+    image: ghcr.io/${IMAGE_PREFIX:-user/submarines}-recipes-service:latest
+    container_name: recipes-service
+    restart: unless-stopped
+    environment: *app-env
+    networks:
+      - submarines
+    labels:
+      - com.centurylinkfoundation.watchtower.enable=true
+
+networks:
+  submarines:
+    external: true

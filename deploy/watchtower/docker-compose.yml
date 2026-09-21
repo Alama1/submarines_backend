@@ -1,0 +1,24 @@
+name: watchtower
+
+services:
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # Only update containers carrying the watchtower.enable label
+      WATCHTOWER_LABEL_ENABLE: "true"
+      # Remove stale images after update
+      WATCHTOWER_CLEANUP: "true"
+      # Poll interval in seconds
+      WATCHTOWER_POLL_INTERVAL: ${WATCHTOWER_POLL_INTERVAL:-300}
+      # Needed if ghcr.io images are private
+      # REPO_USER / REPO_PASS passed via registry auth (docker login on host also works)
+    networks:
+      - submarines
+
+networks:
+  submarines:
+    external: true
