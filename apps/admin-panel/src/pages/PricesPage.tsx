@@ -160,7 +160,7 @@ export const PricesPage: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-slate-900 mb-1">Price Anomalies</h2>
           <p className="text-xs text-slate-500 max-w-2xl">
-            Computed craft cost (ingredients &amp; crystals at market/custom prices) vs your custom price.
+            Craft cost vs your custom price for materials used in submarine part crafting.
             {anomalies ? ` ${anomalies.anomalyCount} of ${anomalies.total} craftables currently flagged.` : ''}
           </p>
         </div>
@@ -214,6 +214,7 @@ export const PricesPage: React.FC = () => {
               <tr>
                 <th className="px-5 py-3">Material</th>
                 <th className="px-5 py-3">Craft Cost</th>
+                <th className="px-5 py-3" title="Total craft operations: this item's own craft plus every craftable ingredient, recursively">Crafts</th>
                 <th className="px-5 py-3">My Custom Price</th>
                 <th className="px-5 py-3">Δ Gil</th>
                 <th className="px-5 py-3">Δ %</th>
@@ -224,15 +225,15 @@ export const PricesPage: React.FC = () => {
             <tbody className="divide-y divide-slate-200">
               {anomaliesLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-8 text-center text-slate-400">
+                  <td colSpan={8} className="px-5 py-8 text-center text-slate-400">
                     Computing craft costs...
                   </td>
                 </tr>
               ) : anomalyItems.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-8 text-center text-slate-400">
-                    No craftable materials yet. Define crafting recipes under Recipes → Raw Base
-                    Materials to unlock craft-cost validation.
+                  <td colSpan={8} className="px-5 py-8 text-center text-slate-400">
+                    No craftable materials used in submarine parts yet. Define recipes and
+                    add the materials to a submarine part to unlock craft-cost validation.
                   </td>
                 </tr>
               ) : (
@@ -252,6 +253,12 @@ export const PricesPage: React.FC = () => {
                         </td>
                         <td className="px-5 py-3.5 font-mono text-sky-700 font-bold">
                           {formatGil(item.craftCost)}
+                        </td>
+                        <td className="px-5 py-3.5 font-mono text-slate-600" title="Total craft operations needed (own craft + craftable ingredients, recursively)">
+                          <span className="inline-flex items-center gap-1">
+                            <Hammer className="w-3 h-3 text-slate-400" />
+                            {item.craftCount}
+                          </span>
                         </td>
                         <td className="px-5 py-3.5 font-mono">
                           {item.myPrice != null ? (
@@ -311,7 +318,7 @@ export const PricesPage: React.FC = () => {
                       </tr>
                       {isExpanded && (
                         <tr className="bg-slate-50/60">
-                          <td colSpan={7} className="px-5 py-3">
+                          <td colSpan={8} className="px-5 py-3">
                             <div className="space-y-1">
                               {item.ingredients.map((ing) => (
                                 <div key={ing.ingredientMaterialId} className="flex items-center gap-2 text-[11px]">

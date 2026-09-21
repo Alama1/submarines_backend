@@ -12,9 +12,14 @@ export { PartSet } from './part-set.entity';
 export { PartSetItem } from './part-set-item.entity';
 export { ApiKey } from './api-key.entity';
 export { AllowedEmail } from './allowed-email.entity';
-export { expandAllPartMaterials, ExpandedMaterialRequirement } from './expand-part-materials';
+export {
+  expandAllPartMaterials,
+  collectPartMaterialIds,
+  ExpandedMaterialRequirement,
+} from './expand-part-materials';
 export {
   computeCraftCosts,
+  computeCraftCounts,
   effectivePriceOf,
   MaterialCostInfo,
 } from './compute-craft-costs';

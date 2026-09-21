@@ -335,9 +335,41 @@ describe('PricesService', () => {
         { ingredientMaterialId: 'shard', quantity: 5 },
       ],
     } as unknown as BaseMaterial;
+    const plate = {
+      id: 'plate',
+      name: 'Iron Plate',
+      marketPrice: 50,
+      myPrice: null,
+      npcPrice: null,
+      recipe: [],
+    } as unknown as BaseMaterial;
+    const alloy = {
+      id: 'alloy',
+      name: 'Steel Alloy',
+      marketPrice: 900,
+      myPrice: null,
+      npcPrice: null,
+      recipe: [
+        { ingredientMaterialId: 'ingot', quantity: 1 },
+        { ingredientMaterialId: 'plate', quantity: 1 },
+      ],
+    } as unknown as BaseMaterial;
+    // Part that consumes the crafted ingot (and alloy in the multi-tier test)
+    const hull = {
+      id: 'shark_hull',
+      name: 'Shark Hull',
+      price: 100,
+      materials: [
+        { material: ingot, quantity: 2 },
+        { material: alloy, quantity: 1 },
+      ],
+    } as unknown as SubmarinePart;
 
     it('should compare craft cost against custom prices', async () => {
       repo.find.mockResolvedValue([ore, shard, ingot]);
+      partRepo.find.mockResolvedValue([
+        { ...hull, materials: [{ material: ingot, quantity: 2 }] },
+      ]);
 
       const res = await service.findAnomalies();
 
@@ -345,6 +377,7 @@ describe('PricesService', () => {
       const item = res.items[0];
       expect(item.id).toBe('ingot');
       expect(item.craftCost).toBe(250); // 2*100 + 5*10
+      expect(item.craftCount).toBe(1); // own craft only
       expect(item.diff).toBe(-50); // craft cheaper than custom price
       expect(Math.abs(item.diffPct!)).toBeCloseTo(16.67, 1);
       expect(item.incomplete).toBe(false);
@@ -353,8 +386,47 @@ describe('PricesService', () => {
       expect(res.thresholds).toEqual({ thresholdPct: 10, thresholdGil: null });
     });
 
+    it('should only list craftables used in submarine part crafting', async () => {
+      const unrelated = {
+        id: 'potion',
+        name: 'Unused Potion',
+        marketPrice: 999,
+        myPrice: 5,
+        npcPrice: null,
+        recipe: [{ ingredientMaterialId: 'ore', quantity: 1 }],
+      } as unknown as BaseMaterial;
+      repo.find.mockResolvedValue([ore, shard, ingot, unrelated]);
+      partRepo.find.mockResolvedValue([
+        { ...hull, materials: [{ material: ingot, quantity: 2 }] },
+      ]);
+
+      const res = await service.findAnomalies();
+
+      expect(res.items.map((i) => i.id)).toEqual(['ingot']);
+      expect(res.total).toBe(1);
+    });
+
+    it('should count crafts recursively: own craft plus craftable ingredients', async () => {
+      // alloy = 1x ingot + 1x plate; ingot is craftable, plate is raw
+      repo.find.mockResolvedValue([ore, shard, ingot, plate, alloy]);
+      partRepo.find.mockResolvedValue([
+        { ...hull, materials: [{ material: alloy, quantity: 1 }] },
+      ]);
+
+      const res = await service.findAnomalies();
+
+      // ingot is reachable via alloy's recipe, so both are listed
+      expect(res.total).toBe(2);
+      const byId = new Map(res.items.map((i) => [i.id, i]));
+      expect(byId.get('alloy')!.craftCount).toBe(2); // own craft + ingot's craft
+      expect(byId.get('ingot')!.craftCount).toBe(1);
+    });
+
     it('should honour a custom % threshold and a gil threshold (OR logic)', async () => {
       repo.find.mockResolvedValue([ore, shard, ingot]);
+      partRepo.find.mockResolvedValue([
+        { ...hull, materials: [{ material: ingot, quantity: 2 }] },
+      ]);
 
       // % set to 90 (16.67% dev is below it) but gil set to 40 (|diff|=50 is above it)
       settingRepo.find.mockResolvedValue([
@@ -371,6 +443,9 @@ describe('PricesService', () => {
 
     it('should not flag when both thresholds are disabled', async () => {
       repo.find.mockResolvedValue([ore, shard, ingot]);
+      partRepo.find.mockResolvedValue([
+        { ...hull, materials: [{ material: ingot, quantity: 2 }] },
+      ]);
       settingRepo.find.mockResolvedValue([
         { key: 'anomalies.thresholdPct', value: '' },
         { key: 'anomalies.thresholdGil', value: '' },
@@ -421,6 +496,9 @@ describe('PricesService', () => {
     it('should mark craft costs as incomplete when an ingredient has no price', async () => {
       const unpricedOre = { ...ore, marketPrice: null };
       repo.find.mockResolvedValue([unpricedOre, shard, ingot]);
+      partRepo.find.mockResolvedValue([
+        { ...hull, materials: [{ material: ingot, quantity: 2 }] },
+      ]);
 
       const res = await service.findAnomalies();
 
@@ -430,6 +508,7 @@ describe('PricesService', () => {
 
     it('should skip materials without craft recipes', async () => {
       repo.find.mockResolvedValue([ore, shard]);
+      partRepo.find.mockResolvedValue([hull]);
 
       const res = await service.findAnomalies();
 

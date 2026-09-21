@@ -77,6 +77,12 @@ export interface PriceAnomalyItem {
   marketPrice: number | null;
   whereToBuy: string;
   craftCost: number;
+  /**
+   * Total number of craft operations needed to produce one unit:
+   * 1 for the item's own craft plus one per craftable ingredient,
+   * recursively through the recipe tree (raw materials count as 0).
+   */
+  craftCount: number;
   /** craftCost - myPrice (null when no custom price is set) */
   diff: number | null;
   /** diff as percentage of myPrice (null when no custom price is set) */

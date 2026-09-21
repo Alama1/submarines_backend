@@ -79,3 +79,46 @@ export function computeCraftCosts(
   for (const id of matById.keys()) resolve(id, new Set());
   return memo;
 }
+
+/**
+ * Total number of craft operations needed to produce one unit from scratch:
+ * 1 for the material's own craft plus, recursively, one for every craftable
+ * ingredient in its recipe tree (raw, non-craftable materials count as 0).
+ * Cycle-safe and memoized.
+ */
+export function computeCraftCounts(
+  matById: Map<string, BaseMaterial>,
+): Map<string, number> {
+  const memo = new Map<string, number>();
+
+  const resolve = (matId: string, stack: Set<string>): number => {
+    const cached = memo.get(matId);
+    if (cached !== undefined) return cached;
+
+    const mat = matById.get(matId);
+    const rows = mat?.recipe ?? [];
+    if (!mat || rows.length === 0) {
+      memo.set(matId, 0);
+      return 0;
+    }
+
+    if (stack.has(matId)) return 0;
+    stack.add(matId);
+
+    let count = 1;
+    for (const row of rows) {
+      const ing = matById.get(row.ingredientMaterialId);
+      if (ing && (ing.recipe?.length ?? 0) > 0) {
+        count += resolve(row.ingredientMaterialId, stack);
+      }
+    }
+
+    stack.delete(matId);
+
+    memo.set(matId, count);
+    return count;
+  };
+
+  for (const id of matById.keys()) resolve(id, new Set());
+  return memo;
+}

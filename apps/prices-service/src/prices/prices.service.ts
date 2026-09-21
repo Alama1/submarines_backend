@@ -14,7 +14,9 @@ import { createEnvelope } from '@ff14/internal-auth';
 import {
   AppSetting,
   BaseMaterial,
+  collectPartMaterialIds,
   computeCraftCosts,
+  computeCraftCounts,
   effectivePriceOf,
   expandAllPartMaterials,
   MaterialCostInfo,
@@ -233,24 +235,29 @@ export class PricesService {
   }
 
   /**
-   * Craft-cost comparison for all craftable materials: computed craft cost
+   * Craft-cost comparison for craftable materials used in submarine part
+   * crafting (directly or via ingredient recipes): computed craft cost
    * (recursive, multi-tier, crystals included) vs the user's custom price.
    * A row is flagged when it deviates beyond the configured thresholds:
    * |diffPct| > thresholdPct OR |diff| > thresholdGil (null disables a check).
    */
   async findAnomalies(): Promise<PriceAnomaliesResponse> {
-    const [materials, thresholds] = await Promise.all([
+    const [materials, allParts, thresholds] = await Promise.all([
       this.repo.find(),
+      this.loadPartsForSets(),
       this.getAnomalyThresholds(),
     ]);
     const matById = new Map<string, BaseMaterial>(
       materials.map((m) => [m.id, m]),
     );
     const costs = computeCraftCosts(matById);
+    const craftCounts = computeCraftCounts(matById);
+    const usedInParts = collectPartMaterialIds(allParts, matById);
 
     const items: PriceAnomalyItem[] = [];
     for (const mat of materials) {
       if (!mat.recipe?.length) continue;
+      if (!usedInParts.has(mat.id)) continue;
       const info: MaterialCostInfo =
         costs.get(mat.id) ?? { craftCost: 0, incomplete: false };
 
@@ -299,6 +306,7 @@ export class PricesService {
         marketPrice: mat.marketPrice,
         whereToBuy: mat.whereToBuy,
         craftCost: info.craftCost,
+        craftCount: craftCounts.get(mat.id) ?? 0,
         diff,
         diffPct,
         incomplete: info.incomplete,

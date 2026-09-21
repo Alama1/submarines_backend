@@ -1,4 +1,5 @@
 import { SubmarinePart } from './submarine-part.entity';
+import { BaseMaterial } from './base-material.entity';
 
 export interface ExpandedMaterialRequirement {
   materialId: string;
@@ -60,4 +61,35 @@ export function expandAllPartMaterials(
     out.set(part.id, list);
   }
   return out;
+}
+
+/**
+ * Collects the IDs of every material involved in submarine part crafting:
+ * all materials referenced directly by any part, plus everything reachable
+ * through their craft recipes (recursively).
+ */
+export function collectPartMaterialIds(
+  parts: SubmarinePart[],
+  matById: Map<string, BaseMaterial>,
+): Set<string> {
+  const result = new Set<string>();
+  const stack: string[] = [];
+
+  for (const p of parts) {
+    for (const pm of p.materials ?? []) {
+      if (pm.material) stack.push(pm.material.id);
+    }
+  }
+
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (result.has(id)) continue;
+    result.add(id);
+    const mat = matById.get(id);
+    for (const row of mat?.recipe ?? []) {
+      stack.push(row.ingredientMaterialId);
+    }
+  }
+
+  return result;
 }
