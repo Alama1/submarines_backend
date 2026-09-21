@@ -253,6 +253,14 @@ export const DashboardPage: React.FC = () => {
                           Contact: <span className="text-slate-700">{order.contactInfo}</span>
                         </p>
                       )}
+                      <p className="text-xs text-slate-500 mt-1">
+                        Fulfillment:{' '}
+                        {order.fulfillmentDt ? (
+                          <span className="font-semibold text-amber-700">{order.fulfillmentDt}</span>
+                        ) : (
+                          <span className="font-semibold text-emerald-700">ASAP</span>
+                        )}
+                      </p>
                     </div>
                     <div className="text-right">
                       <span className="text-xs font-bold text-cyan-600">

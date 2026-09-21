@@ -105,6 +105,7 @@ export class OrdersService {
       isAnonymous: boolean;
       contactInfo: string | null;
       notes: string | null;
+      fulfillmentDt: string | null;
       confirmedAt: Date | null;
       createdAt: Date;
       items: Array<{
@@ -218,6 +219,7 @@ export class OrdersService {
         isAnonymous: o.isAnonymous,
         contactInfo: unmask ? o.contactInfo : null,
         notes: unmask ? o.notes : null,
+        fulfillmentDt: o.fulfillmentDt,
         confirmedAt: o.confirmedAt,
         createdAt: o.createdAt,
         items,

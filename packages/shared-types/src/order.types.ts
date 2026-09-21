@@ -63,6 +63,7 @@ export interface InProgressOrderFeedItem {
   isAnonymous: boolean;
   contactInfo: string | null;
   notes: string | null;
+  fulfillmentDt: string | null;
   confirmedAt: string | null;
   createdAt: string;
   items: Array<{

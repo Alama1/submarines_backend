@@ -186,6 +186,7 @@ export const OrdersPage: React.FC = () => {
                 <th className="px-5 py-3">Status</th>
                 <th className="px-5 py-3">Items</th>
                 <th className="px-5 py-3">Total (Gil)</th>
+                <th className="px-5 py-3">Fulfillment</th>
                 <th className="px-5 py-3">Date</th>
                 <th className="px-5 py-3 text-right">Actions</th>
               </tr>
@@ -193,13 +194,13 @@ export const OrdersPage: React.FC = () => {
             <tbody className="divide-y divide-slate-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-8 text-center text-slate-400">
+                  <td colSpan={8} className="px-5 py-8 text-center text-slate-400">
                     Loading orders...
                   </td>
                 </tr>
               ) : orders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-8 text-center text-slate-400">
+                  <td colSpan={8} className="px-5 py-8 text-center text-slate-400">
                     No orders found matching this filter.
                   </td>
                 </tr>
@@ -223,6 +224,17 @@ export const OrdersPage: React.FC = () => {
                     </td>
                     <td className="px-5 py-3.5 font-mono text-slate-800">
                       {formatGil(order.total)}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      {order.fulfillmentDt ? (
+                        <span className="inline-flex items-center rounded-md bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                          {order.fulfillmentDt}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                          ASAP
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3.5 text-slate-500">
                       {new Date(order.createdAt).toLocaleDateString()}
@@ -304,11 +316,21 @@ export const OrdersPage: React.FC = () => {
               <StatusBadge status={modalOrder.status} />
             </div>
 
-            {modalOrder.contactInfo && (
-              <p className="text-xs text-slate-500">
-                Contact: <strong className="text-slate-700">{modalOrder.contactInfo}</strong>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+              {modalOrder.contactInfo && (
+                <p>
+                  Contact: <strong className="text-slate-700">{modalOrder.contactInfo}</strong>
+                </p>
+              )}
+              <p>
+                Fulfillment:{' '}
+                {modalOrder.fulfillmentDt ? (
+                  <strong className="text-amber-700">{modalOrder.fulfillmentDt}</strong>
+                ) : (
+                  <strong className="text-emerald-700">ASAP</strong>
+                )}
               </p>
-            )}
+            </div>
 
             {/* Items Breakdown */}
             <div className="space-y-3">
