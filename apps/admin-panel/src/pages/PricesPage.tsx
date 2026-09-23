@@ -12,6 +12,8 @@ import {
   ChevronDown,
   ChevronRight,
   Hammer,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { PartSetsPanel } from '../components/PartSetsPanel';
 import {
@@ -35,27 +37,34 @@ const statusOf = (
       cls: 'bg-violet-50 border-violet-200 text-violet-700',
     };
   }
-  if (item.myPrice == null || item.diffPct == null) {
+  if (item.anomalyIgnore) {
+    return {
+      label: 'Ignored',
+      cls: 'bg-slate-100 border-slate-200 text-slate-400',
+    };
+  }
+  if (item.myPrice == null || item.diff == null) {
     return {
       label: 'No custom price',
       cls: 'bg-slate-50 border-slate-200 text-slate-500',
     };
   }
   if (item.isAnomaly) {
-    const viaGil =
-      thresholds?.thresholdGil != null &&
-      item.diff != null &&
-      Math.abs(item.diff) > thresholds.thresholdGil;
-    const suffix = viaGil ? `${formatGil(Math.abs(item.diff!))}` : `${Math.abs(item.diffPct).toFixed(0)}%`;
-    return item.diff! > 0
-      ? {
-          label: `Underpriced ${suffix}`,
-          cls: 'bg-rose-50 border-rose-200 text-rose-700',
-        }
-      : {
-          label: `Overpriced ${suffix}`,
-          cls: 'bg-amber-50 border-amber-200 text-amber-700',
-        };
+    // diff = craftCost - myPrice → gap = myPrice - craftCost
+    const gap = -item.diff;
+    if (gap < 0) {
+      return {
+        label: `Underpriced ${formatGil(item.diff)}`,
+        cls: 'bg-rose-50 border-rose-200 text-rose-700',
+      };
+    }
+    const minGap = thresholds?.desiredDiff != null
+      ? thresholds.desiredDiff - (thresholds.desiredDiffOffset ?? 0)
+      : 0;
+    return {
+      label: `Below target ${formatGil(minGap - gap)}`,
+      cls: 'bg-amber-50 border-amber-200 text-amber-700',
+    };
   }
   return {
     label: 'OK',
@@ -69,8 +78,9 @@ export const PricesPage: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [myPriceVal, setMyPriceVal] = useState<number | ''>('');
   const [expandedAnomalyId, setExpandedAnomalyId] = useState<string | null>(null);
-  const [pctInput, setPctInput] = useState<number | ''>('');
-  const [gilInput, setGilInput] = useState<number | ''>('');
+  const [desiredDiffInput, setDesiredDiffInput] = useState<number | ''>('');
+  const [offsetInput, setOffsetInput] = useState<number | ''>('');
+  const [showIgnored, setShowIgnored] = useState(false);
 
   const { data, isLoading } = useQuery<{ items: any[]; total: number }>({
     queryKey: ['prices', search],
@@ -81,8 +91,9 @@ export const PricesPage: React.FC = () => {
   });
 
   const { data: anomalies, isLoading: anomaliesLoading } = useQuery<PriceAnomaliesResponse>({
-    queryKey: ['price-anomalies'],
-    queryFn: async () => (await api.get('/prices/anomalies')).data,
+    queryKey: ['price-anomalies', showIgnored],
+    queryFn: async () =>
+      (await api.get(`/prices/anomalies${showIgnored ? '?includeIgnored=true' : ''}`)).data,
   });
 
   const { data: thresholdSettings } = useQuery<AnomalyThresholds>({
@@ -90,11 +101,11 @@ export const PricesPage: React.FC = () => {
     queryFn: async () => (await api.get('/prices/anomalies/settings')).data,
   });
 
-  // Seed the editor inputs once thresholds are loaded
+  // Seed the editor inputs once settings are loaded
   React.useEffect(() => {
     if (thresholdSettings) {
-      setPctInput((prev) => (prev === '' ? thresholdSettings.thresholdPct ?? '' : prev));
-      setGilInput((prev) => (prev === '' ? thresholdSettings.thresholdGil ?? '' : prev));
+      setDesiredDiffInput((prev) => (prev === '' ? thresholdSettings.desiredDiff ?? '' : prev));
+      setOffsetInput((prev) => (prev === '' ? thresholdSettings.desiredDiffOffset ?? '' : prev));
     }
   }, [thresholdSettings]);
 
@@ -109,15 +120,26 @@ export const PricesPage: React.FC = () => {
   const saveThresholdsMutation = useMutation({
     mutationFn: () =>
       api.put('/prices/anomalies/settings', {
-        thresholdPct: pctInput === '' ? null : Number(pctInput),
-        thresholdGil: gilInput === '' ? null : Number(gilInput),
+        desiredDiff: desiredDiffInput === '' ? null : Number(desiredDiffInput),
+        desiredDiffOffset: offsetInput === '' ? 0 : Number(offsetInput),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['anomaly-thresholds'] });
       queryClient.invalidateQueries({ queryKey: ['price-anomalies'] });
     },
     onError: (err: any) => {
-      alert(err.response?.data?.message || 'Failed to save anomaly thresholds.');
+      alert(err.response?.data?.message || 'Failed to save anomaly settings.');
+    },
+  });
+
+  const ignoreMutation = useMutation({
+    mutationFn: ({ id, ignore }: { id: string; ignore: boolean }) =>
+      api.put(`/prices/${id}/anomaly-ignore`, { ignore }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['price-anomalies'] });
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.message || 'Failed to update the ignore list.');
     },
   });
 
@@ -165,33 +187,44 @@ export const PricesPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Adjustable detector thresholds: % OR gil (empty = off) */}
+        {/* Desired diff settings: flat gil only (empty desired diff = flagging off) */}
         <div className="flex flex-wrap items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl p-2.5">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1">
-            Flag when diff
+            Custom price
             <br />
-            exceeds
+            target
           </span>
           <label className="flex items-center gap-1.5">
+            <span
+              className="text-xs text-slate-600 font-medium"
+              title="Target gap between craft cost and your custom price"
+            >
+              Desired diff
+            </span>
             <input
               type="number"
               min="0"
               placeholder="off"
-              value={pctInput}
-              onChange={(e) => setPctInput(e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0))}
-              className="w-16 px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 font-mono placeholder:text-slate-300"
-            />
-            <span className="text-xs text-slate-600 font-medium">%</span>
-          </label>
-          <span className="text-slate-300 text-xs font-bold">OR</span>
-          <label className="flex items-center gap-1.5">
-            <input
-              type="number"
-              min="0"
-              placeholder="off"
-              value={gilInput}
-              onChange={(e) => setGilInput(e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0))}
+              value={desiredDiffInput}
+              onChange={(e) => setDesiredDiffInput(e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0))}
               className="w-24 px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 font-mono placeholder:text-slate-300"
+            />
+            <span className="text-xs text-slate-600 font-medium">Gil</span>
+          </label>
+          <label className="flex items-center gap-1.5">
+            <span
+              className="text-xs text-slate-600 font-medium"
+              title="How far below the desired diff the price may fall before it gets flagged"
+            >
+              Offset
+            </span>
+            <input
+              type="number"
+              min="0"
+              placeholder="0"
+              value={offsetInput}
+              onChange={(e) => setOffsetInput(e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0))}
+              className="w-20 px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 font-mono placeholder:text-slate-300"
             />
             <span className="text-xs text-slate-600 font-medium">Gil</span>
           </label>
@@ -199,12 +232,30 @@ export const PricesPage: React.FC = () => {
             onClick={() => saveThresholdsMutation.mutate()}
             disabled={saveThresholdsMutation.isPending}
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs shadow-sm transition disabled:opacity-50"
-            title="Empty = that check is disabled"
+            title="Flag when custom price is less than desired diff (minus offset) above craft cost. Empty desired diff disables flagging."
           >
             <Save className="w-3.5 h-3.5" />
             {saveThresholdsMutation.isPending ? 'Saving...' : 'Save'}
           </button>
         </div>
+      </div>
+
+      {/* Ignored materials controls */}
+      <div className="flex items-center gap-3 -mt-2">
+        <button
+          onClick={() => setShowIgnored(!showIgnored)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
+            showIgnored
+              ? 'bg-slate-100 border-slate-300 text-slate-700'
+              : 'bg-white border-slate-300 text-slate-500 hover:bg-slate-50'
+          }`}
+        >
+          {showIgnored ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+          <span>{showIgnored ? 'Showing ignored materials' : 'Ignored materials hidden'}</span>
+        </button>
+        <span className="text-[11px] text-slate-400">
+          Use the eye icon on a row to add it to the ignore list — it will no longer be flagged or listed.
+        </span>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
@@ -246,6 +297,11 @@ export const PricesPage: React.FC = () => {
                         <td className="px-5 py-3.5 font-medium text-slate-900">
                           <div className="flex items-center gap-2">
                             {item.name}
+                            {item.anomalyIgnore && (
+                              <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-400 text-[9px] font-semibold uppercase">
+                                ignored
+                              </span>
+                            )}
                             {item.itemId != null && (
                               <span className="text-[10px] font-mono text-slate-400">#{item.itemId}</span>
                             )}
@@ -303,17 +359,41 @@ export const PricesPage: React.FC = () => {
                           </span>
                         </td>
                         <td className="px-5 py-3.5 text-right">
-                          <button
-                            onClick={() => setExpandedAnomalyId(isExpanded ? null : item.id)}
-                            className="p-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition"
-                            title="Ingredient breakdown"
-                          >
-                            {isExpanded ? (
-                              <ChevronDown className="w-3.5 h-3.5" />
-                            ) : (
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            )}
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() =>
+                                ignoreMutation.mutate({ id: item.id, ignore: !item.anomalyIgnore })
+                              }
+                              disabled={ignoreMutation.isPending}
+                              className={`p-1.5 rounded-lg border transition ${
+                                item.anomalyIgnore
+                                  ? 'bg-slate-100 border-slate-300 text-slate-600 hover:bg-slate-200'
+                                  : 'bg-white border-slate-300 text-slate-400 hover:bg-slate-50 hover:text-slate-600'
+                              }`}
+                              title={
+                                item.anomalyIgnore
+                                  ? 'Remove from ignore list'
+                                  : 'Ignore — hide from price anomalies'
+                              }
+                            >
+                              {item.anomalyIgnore ? (
+                                <Eye className="w-3.5 h-3.5" />
+                              ) : (
+                                <EyeOff className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => setExpandedAnomalyId(isExpanded ? null : item.id)}
+                              className="p-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition"
+                              title="Ingredient breakdown"
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              ) : (
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                       {isExpanded && (

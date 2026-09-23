@@ -221,4 +221,54 @@ describe('InventoryService — claims', () => {
       await expect(svc.findClaims('missing-id')).rejects.toThrow(NotFoundException);
     });
   });
+
+  describe('getNetWorth', () => {
+    it('values stock at universalis market price and at custom prices', async () => {
+      matRepo.find.mockResolvedValue([
+        {
+          ...material,
+          currentStock: 10,
+          marketPrice: 100,
+          myPrice: 150,
+          npcPrice: null,
+        },
+        {
+          ...material,
+          id: 'mat-2',
+          name: 'Iron Ore',
+          currentStock: 5,
+          marketPrice: 40,
+          myPrice: null,
+          npcPrice: null,
+        },
+        {
+          ...material,
+          id: 'mat-3',
+          name: 'Vendor Item',
+          currentStock: 2,
+          marketPrice: null,
+          myPrice: null,
+          npcPrice: 7,
+        },
+        {
+          ...material,
+          id: 'mat-4',
+          name: 'Unpriced',
+          currentStock: 3,
+          marketPrice: null,
+          myPrice: null,
+          npcPrice: null,
+        },
+      ] as BaseMaterial[]);
+
+      const result = await svc.getNetWorth();
+
+      // market: 10*100 + 5*40 + 2*0 + 3*0
+      expect(result.marketNetWorth).toBe(1200);
+      // my: 10*150 + 5*40 + 2*7 + 3*0
+      expect(result.myNetWorth).toBe(1714);
+      expect(result.materialCount).toBe(4);
+      expect(result.unpricedCount).toBe(1);
+    });
+  });
 });

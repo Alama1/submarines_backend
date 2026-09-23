@@ -26,12 +26,12 @@ import {
 } from '@ff14/entities';
 import {
   AnomalyThresholds,
-  ANOMALY_THRESHOLD_GIL_KEY,
-  ANOMALY_THRESHOLD_PCT_KEY,
+  ANOMALY_DESIRED_DIFF_KEY,
+  ANOMALY_DESIRED_DIFF_OFFSET_KEY,
   CreatePartSetDto,
   MaterialIngredientCost,
   PartSetProfit,
-  PRICE_ANOMALY_THRESHOLD_PCT,
+  PRICE_ANOMALY_DESIRED_DIFF,
   PriceAnomaliesResponse,
   PriceAnomalyItem,
   UNIVERSALIS_WORLD_KEY,
@@ -122,19 +122,20 @@ export class PricesService {
   async getAnomalyThresholds(): Promise<AnomalyThresholds> {
     const rows = await this.settingRepo.find({
       where: [
-        { key: ANOMALY_THRESHOLD_PCT_KEY },
-        { key: ANOMALY_THRESHOLD_GIL_KEY },
+        { key: ANOMALY_DESIRED_DIFF_KEY },
+        { key: ANOMALY_DESIRED_DIFF_OFFSET_KEY },
       ],
     });
     const byKey = new Map(rows.map((r) => [r.key, r.value]));
     // Key absent -> use the default; key present but blank -> explicitly disabled.
-    const pctRaw = byKey.get(ANOMALY_THRESHOLD_PCT_KEY);
+    const diffRaw = byKey.get(ANOMALY_DESIRED_DIFF_KEY);
     return {
-      thresholdPct:
-        pctRaw === undefined
-          ? PRICE_ANOMALY_THRESHOLD_PCT
-          : this.parseThreshold(pctRaw),
-      thresholdGil: this.parseThreshold(byKey.get(ANOMALY_THRESHOLD_GIL_KEY)),
+      desiredDiff:
+        diffRaw === undefined
+          ? PRICE_ANOMALY_DESIRED_DIFF
+          : this.parseThreshold(diffRaw),
+      desiredDiffOffset:
+        this.parseThreshold(byKey.get(ANOMALY_DESIRED_DIFF_OFFSET_KEY)) ?? 0,
     };
   }
 
@@ -142,11 +143,14 @@ export class PricesService {
     dto: UpdateAnomalyThresholdsDto,
   ): Promise<AnomalyThresholds> {
     const updates: Array<{ key: string; value: number | null }> = [];
-    if (dto.thresholdPct !== undefined) {
-      updates.push({ key: ANOMALY_THRESHOLD_PCT_KEY, value: dto.thresholdPct });
+    if (dto.desiredDiff !== undefined) {
+      updates.push({ key: ANOMALY_DESIRED_DIFF_KEY, value: dto.desiredDiff });
     }
-    if (dto.thresholdGil !== undefined) {
-      updates.push({ key: ANOMALY_THRESHOLD_GIL_KEY, value: dto.thresholdGil });
+    if (dto.desiredDiffOffset !== undefined) {
+      updates.push({
+        key: ANOMALY_DESIRED_DIFF_OFFSET_KEY,
+        value: dto.desiredDiffOffset,
+      });
     }
 
     for (const { key, value } of updates) {
@@ -162,6 +166,15 @@ export class PricesService {
 
     await this.cache.reset();
     return this.getAnomalyThresholds();
+  }
+
+  async setAnomalyIgnore(id: string, ignore: boolean): Promise<void> {
+    const mat = await this.repo.findOne({ where: { id } });
+    if (!mat) throw new NotFoundException(`Material "${id}" not found`);
+
+    mat.anomalyIgnore = ignore;
+    await this.repo.save(mat);
+    await this.cache.reset();
   }
 
   private mapToPriceItem(mat: BaseMaterial): MaterialPriceItem {
@@ -238,10 +251,13 @@ export class PricesService {
    * Craft-cost comparison for craftable materials used in submarine part
    * crafting (directly or via ingredient recipes): computed craft cost
    * (recursive, multi-tier, crystals included) vs the user's custom price.
-   * A row is flagged when it deviates beyond the configured thresholds:
-   * |diffPct| > thresholdPct OR |diff| > thresholdGil (null disables a check).
+   * The custom price is expected to sit at least `desiredDiff` gil above the
+   * craft cost; a row is flagged when the gap falls below
+   * `desiredDiff - desiredDiffOffset` (i.e. the custom price is not high
+   * enough above the craft cost). Materials on the ignore list are excluded
+   * unless `includeIgnored` is set.
    */
-  async findAnomalies(): Promise<PriceAnomaliesResponse> {
+  async findAnomalies(includeIgnored = false): Promise<PriceAnomaliesResponse> {
     const [materials, allParts, thresholds] = await Promise.all([
       this.repo.find(),
       this.loadPartsForSets(),
@@ -253,11 +269,16 @@ export class PricesService {
     const costs = computeCraftCosts(matById);
     const craftCounts = computeCraftCounts(matById);
     const usedInParts = collectPartMaterialIds(allParts, matById);
+    const minGap =
+      thresholds.desiredDiff != null
+        ? thresholds.desiredDiff - (thresholds.desiredDiffOffset ?? 0)
+        : null;
 
     const items: PriceAnomalyItem[] = [];
     for (const mat of materials) {
       if (!mat.recipe?.length) continue;
       if (!usedInParts.has(mat.id)) continue;
+      if (mat.anomalyIgnore && !includeIgnored) continue;
       const info: MaterialCostInfo =
         costs.get(mat.id) ?? { craftCost: 0, incomplete: false };
 
@@ -290,13 +311,10 @@ export class PricesService {
       const diffPct =
         diff != null && mat.myPrice ? (diff / mat.myPrice) * 100 : null;
 
-      const isAnomaly =
-        (thresholds.thresholdPct != null &&
-          diffPct != null &&
-          Math.abs(diffPct) > thresholds.thresholdPct) ||
-        (thresholds.thresholdGil != null &&
-          diff != null &&
-          Math.abs(diff) > thresholds.thresholdGil);
+      // diff = craftCost - myPrice, so a negative diff means the custom price
+      // exceeds the craft cost. Flag when the price does not clear the
+      // minimum gap: diff > -minGap.
+      const isAnomaly = minGap != null && diff != null && diff > -minGap;
 
       items.push({
         id: mat.id,
@@ -311,17 +329,19 @@ export class PricesService {
         diffPct,
         incomplete: info.incomplete,
         isAnomaly,
+        anomalyIgnore: mat.anomalyIgnore,
         ingredients,
       });
     }
 
     items.sort((a, b) => {
-      if (a.diffPct == null && b.diffPct == null) {
+      if (a.diff == null && b.diff == null) {
         return b.craftCost - a.craftCost;
       }
-      if (a.diffPct == null) return 1;
-      if (b.diffPct == null) return -1;
-      return Math.abs(b.diffPct) - Math.abs(a.diffPct);
+      if (a.diff == null) return 1;
+      if (b.diff == null) return -1;
+      // Worst offenders first: highest diff (price furthest below craft cost)
+      return b.diff - a.diff;
     });
 
     const anomalyCount = items.filter((i) => i.isAnomaly).length;

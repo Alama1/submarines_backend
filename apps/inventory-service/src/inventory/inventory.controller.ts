@@ -62,6 +62,13 @@ export class InventoryController {
     return this.svc.findAllClaims();
   }
 
+  @Get('net-worth')
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(30)
+  getNetWorth() {
+    return this.svc.getNetWorth();
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.svc.findOne(id);

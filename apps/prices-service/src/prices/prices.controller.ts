@@ -16,6 +16,7 @@ import { PricesService } from './prices.service';
 import { UpdatePriceDto } from './dto/update-price.dto';
 import { UpdateWorldDto } from './dto/update-world.dto';
 import { UpdateAnomalyThresholdsDto } from './dto/update-anomaly-thresholds.dto';
+import { UpdateAnomalyIgnoreDto } from './dto/update-anomaly-ignore.dto';
 import { CreatePartSetDto } from './dto/create-set.dto';
 import { UpdatePartSetDto } from './dto/update-set.dto';
 
@@ -86,8 +87,16 @@ export class PricesController {
   @Get('anomalies')
   @UseInterceptors(CacheInterceptor)
   @CacheTTL(300)
-  findAnomalies() {
-    return this.svc.findAnomalies();
+  findAnomalies(@Query('includeIgnored') includeIgnored?: string) {
+    return this.svc.findAnomalies(includeIgnored === 'true');
+  }
+
+  @Put(':id/anomaly-ignore')
+  setAnomalyIgnore(
+    @Param('id') id: string,
+    @Body() dto: UpdateAnomalyIgnoreDto,
+  ) {
+    return this.svc.setAnomalyIgnore(id, dto.ignore);
   }
 
   @Get(':id')

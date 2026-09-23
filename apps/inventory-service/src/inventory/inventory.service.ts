@@ -20,6 +20,7 @@ import { IngestDto } from './dto/ingest.dto';
 import { UpdateStockDto } from './dto/update-stock.dto';
 import { UpdateTargetDto } from './dto/update-target.dto';
 import { CreateClaimDto } from './dto/create-claim.dto';
+import { NetWorthResponse } from '@ff14/types';
 
 export interface InventoryItemStock {
   id: string;
@@ -188,6 +189,37 @@ export class InventoryService {
     }
 
     return grouped;
+  }
+
+  private effectivePriceOf(mat: BaseMaterial): number {
+    return mat.myPrice ?? mat.marketPrice ?? mat.npcPrice ?? 0;
+  }
+
+  /**
+   * Net worth of all stock on hand, valued two ways:
+   *  - marketNetWorth: universalis market price per unit (unpriced -> 0)
+   *  - myNetWorth: the custom price where set, otherwise the effective price
+   */
+  async getNetWorth(): Promise<NetWorthResponse> {
+    const materials = await this.repo.find();
+
+    let marketNetWorth = 0;
+    let myNetWorth = 0;
+    let unpricedCount = 0;
+
+    for (const mat of materials) {
+      if (mat.currentStock <= 0) continue;
+      if (this.effectivePriceOf(mat) === 0) unpricedCount++;
+      marketNetWorth += mat.currentStock * (mat.marketPrice ?? 0);
+      myNetWorth += mat.currentStock * this.effectivePriceOf(mat);
+    }
+
+    return {
+      marketNetWorth,
+      myNetWorth,
+      materialCount: materials.length,
+      unpricedCount,
+    };
   }
 
   async findOne(id: string): Promise<InventoryItemStock> {

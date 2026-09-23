@@ -51,6 +51,10 @@ export class BaseMaterial {
   })
   category: MaterialCategory;
 
+  /** When true, the material is excluded from price anomaly checks. */
+  @Column({ type: 'boolean', default: false })
+  anomalyIgnore: boolean;
+
   @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 

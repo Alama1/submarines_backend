@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import { formatNumber, sourceBadgeClass } from '../lib/utils';
+import { formatNumber, formatGil, sourceBadgeClass } from '../lib/utils';
 import {
   Search,
   AlertTriangle,
@@ -15,8 +15,10 @@ import {
   X,
   Plus,
   Trash2,
+  Coins,
+  Wallet,
 } from 'lucide-react';
-import { MaterialClaimsResponse, AllClaimsResponse, MaterialClaimOverview } from '@ff14/types';
+import { MaterialClaimsResponse, AllClaimsResponse, MaterialClaimOverview, NetWorthResponse } from '@ff14/types';
 import { SubmarinePart } from '@ff14/types';
 
 /**
@@ -435,6 +437,12 @@ export const InventoryPage: React.FC = () => {
     queryFn: async () => (await api.get('/recipes')).data,
   });
 
+  // Net worth of the current stock (universalis + custom prices)
+  const { data: netWorth } = useQuery<NetWorthResponse>({
+    queryKey: ['net-worth'],
+    queryFn: async () => (await api.get('/inventory/net-worth')).data,
+  });
+
   const partsList = Array.isArray(parts) ? parts : [];
   const totalTargetedParts = partsList.reduce((acc, p) => acc + (p.desiredStock || 0), 0);
 
@@ -446,6 +454,7 @@ export const InventoryPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-repair'] });
       queryClient.invalidateQueries({ queryKey: ['materials'] });
+      queryClient.invalidateQueries({ queryKey: ['net-worth'] });
     },
   });
 
@@ -456,6 +465,7 @@ export const InventoryPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-repair'] });
       queryClient.invalidateQueries({ queryKey: ['materials'] });
+      queryClient.invalidateQueries({ queryKey: ['net-worth'] });
       alert('All raw material targets recalculated from submarine part goals!');
     },
   });
@@ -466,6 +476,7 @@ export const InventoryPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-repair'] });
+      queryClient.invalidateQueries({ queryKey: ['net-worth'] });
     },
   });
 
@@ -475,6 +486,7 @@ export const InventoryPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-repair'] });
+      queryClient.invalidateQueries({ queryKey: ['net-worth'] });
     },
   });
 
@@ -515,6 +527,45 @@ export const InventoryPage: React.FC = () => {
             <AlertTriangle className="w-3.5 h-3.5" />
             <span>Deficits Only</span>
           </button>
+        </div>
+      </div>
+
+      {/* ── Net Worth (current stock valued at universalis + custom prices) ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-600 flex-shrink-0">
+            <Coins className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              Net Worth @ Universalis
+            </div>
+            <div className="text-xl font-bold font-mono text-sky-700 truncate">
+              {formatGil(netWorth?.marketNetWorth ?? 0)}
+            </div>
+            <p className="text-[11px] text-slate-500">
+              Current stock valued at Universalis medium market prices.
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 flex-shrink-0">
+            <Wallet className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              Net Worth @ My Prices
+            </div>
+            <div className="text-xl font-bold font-mono text-emerald-700 truncate">
+              {formatGil(netWorth?.myNetWorth ?? 0)}
+            </div>
+            <p className="text-[11px] text-slate-500">
+              Current stock valued at your custom prices (market/NPC as fallback).
+              {(netWorth?.unpricedCount ?? 0) > 0 &&
+                ` ${netWorth!.unpricedCount} materials have no price source yet.`}
+            </p>
+          </div>
         </div>
       </div>
 

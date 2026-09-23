@@ -91,6 +91,8 @@ export interface PriceAnomalyItem {
   incomplete: boolean;
   /** true when the row deviates beyond the currently configured thresholds */
   isAnomaly: boolean;
+  /** true when the material is on the anomaly ignore list (hidden by default) */
+  anomalyIgnore: boolean;
   ingredients: MaterialIngredientCost[];
 }
 
@@ -103,26 +105,43 @@ export interface PriceAnomaliesResponse {
 }
 
 /**
- * Anomaly detector thresholds. A row is flagged when EITHER check fires:
- *   |diffPct| > thresholdPct  (when thresholdPct is not null)
- *   |diff|   > thresholdGil   (when thresholdGil is not null)
- * A null threshold disables that check.
+ * Anomaly detector settings (flat gil only).
+ *
+ * The custom price ("my price") is expected to sit at least `desiredDiff`
+ * above the craft cost. `desiredDiffOffset` is the tolerated shortfall:
+ * a row is flagged when
+ *   myPrice - craftCost < desiredDiff - desiredDiffOffset
+ * A null desiredDiff disables flagging entirely; a null offset is treated as 0.
  */
 export interface AnomalyThresholds {
-  thresholdPct: number | null;
-  thresholdGil: number | null;
+  desiredDiff: number | null;
+  desiredDiffOffset: number | null;
 }
 
-export const ANOMALY_THRESHOLD_PCT_KEY = 'anomalies.thresholdPct';
-export const ANOMALY_THRESHOLD_GIL_KEY = 'anomalies.thresholdGil';
+export const ANOMALY_DESIRED_DIFF_KEY = 'anomalies.desiredDiff';
+export const ANOMALY_DESIRED_DIFF_OFFSET_KEY = 'anomalies.desiredDiffOffset';
 
-/** Default % deviation flag when nothing is configured */
-export const PRICE_ANOMALY_THRESHOLD_PCT = 10;
+/** Default desired diff (custom price must exceed craft cost) */
+export const PRICE_ANOMALY_DESIRED_DIFF = 0;
 
 export interface StockStatusResponse {
   materials: BaseMaterial[];
   total: number;
   missingCount: number;
+}
+
+/**
+ * Net worth of the current stock, valued two ways:
+ *  - market: Σ currentStock × universalis market price (unpriced → 0)
+ *  - my:     Σ currentStock × (myPrice ?? marketPrice ?? npcPrice)
+ */
+export interface NetWorthResponse {
+  marketNetWorth: number;
+  myNetWorth: number;
+  /** materials included in the totals */
+  materialCount: number;
+  /** materials with no usable price source (they contribute 0) */
+  unpricedCount: number;
 }
 
 export interface MaterialClaim {

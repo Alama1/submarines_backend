@@ -131,6 +131,31 @@ describe('PricesService', () => {
     expect(cache.reset).toHaveBeenCalled();
   });
 
+  describe('Anomaly ignore list', () => {
+    it('should mark a material as ignored and reset the cache', async () => {
+      await service.setAnomalyIgnore('mat-1', true);
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'mat-1', anomalyIgnore: true }),
+      );
+      expect(cache.reset).toHaveBeenCalled();
+    });
+
+    it('should un-ignore a material', async () => {
+      repo.findOne.mockResolvedValueOnce({ ...mockMaterial, anomalyIgnore: true });
+      await service.setAnomalyIgnore('mat-1', false);
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'mat-1', anomalyIgnore: false }),
+      );
+    });
+
+    it('should throw when ignoring a missing material', async () => {
+      repo.findOne.mockResolvedValueOnce(null);
+      await expect(service.setAnomalyIgnore('nope', true)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
   describe('Universalis settings', () => {
     it('should return the default world when no DB setting exists', async () => {
       const res = await service.getUniversalisSettings();
@@ -381,9 +406,127 @@ describe('PricesService', () => {
       expect(item.diff).toBe(-50); // craft cheaper than custom price
       expect(Math.abs(item.diffPct!)).toBeCloseTo(16.67, 1);
       expect(item.incomplete).toBe(false);
-      expect(item.isAnomaly).toBe(true);
+      // custom price clears the craft cost -> not flagged by default
+      expect(item.isAnomaly).toBe(false);
+      expect(res.anomalyCount).toBe(0);
+      expect(res.thresholds).toEqual({ desiredDiff: 0, desiredDiffOffset: 0 });
+    });
+
+    it('should flag when the price gap is below the desired diff', async () => {
+      repo.find.mockResolvedValue([ore, shard, ingot]);
+      partRepo.find.mockResolvedValue([
+        { ...hull, materials: [{ material: ingot, quantity: 2 }] },
+      ]);
+      // gap = myPrice(300) - craftCost(250) = 50, desired diff = 100 -> flagged
+      settingRepo.find.mockResolvedValue([
+        { key: 'anomalies.desiredDiff', value: '100' },
+      ]);
+
+      const res = await service.findAnomalies();
+
+      expect(res.thresholds).toEqual({ desiredDiff: 100, desiredDiffOffset: 0 });
+      expect(res.items[0].isAnomaly).toBe(true);
       expect(res.anomalyCount).toBe(1);
-      expect(res.thresholds).toEqual({ thresholdPct: 10, thresholdGil: null });
+    });
+
+    it('should not flag within the desired diff offset', async () => {
+      repo.find.mockResolvedValue([ore, shard, ingot]);
+      partRepo.find.mockResolvedValue([
+        { ...hull, materials: [{ material: ingot, quantity: 2 }] },
+      ]);
+      // min gap = 100 - 100 = 0; gap of 50 is fine -> not flagged
+      settingRepo.find.mockResolvedValue([
+        { key: 'anomalies.desiredDiff', value: '100' },
+        { key: 'anomalies.desiredDiffOffset', value: '100' },
+      ]);
+
+      const res = await service.findAnomalies();
+
+      expect(res.thresholds).toEqual({ desiredDiff: 100, desiredDiffOffset: 100 });
+      expect(res.items[0].isAnomaly).toBe(false);
+      expect(res.anomalyCount).toBe(0);
+    });
+
+    it('should flag when the custom price is below craft cost', async () => {
+      const underpriced = { ...ingot, myPrice: 200 };
+      repo.find.mockResolvedValue([ore, shard, underpriced]);
+      partRepo.find.mockResolvedValue([
+        { ...hull, materials: [{ material: underpriced, quantity: 2 }] },
+      ]);
+
+      const res = await service.findAnomalies();
+
+      expect(res.items[0].diff).toBe(50); // craft cost above custom price
+      expect(res.items[0].isAnomaly).toBe(true);
+      expect(res.anomalyCount).toBe(1);
+    });
+
+    it('should not flag when desired diff is disabled', async () => {
+      const underpriced = { ...ingot, myPrice: 200 };
+      repo.find.mockResolvedValue([ore, shard, underpriced]);
+      partRepo.find.mockResolvedValue([
+        { ...hull, materials: [{ material: underpriced, quantity: 2 }] },
+      ]);
+      settingRepo.find.mockResolvedValue([
+        { key: 'anomalies.desiredDiff', value: '' },
+      ]);
+
+      const res = await service.findAnomalies();
+
+      expect(res.thresholds).toEqual({ desiredDiff: null, desiredDiffOffset: 0 });
+      expect(res.items[0].isAnomaly).toBe(false);
+      expect(res.anomalyCount).toBe(0);
+    });
+
+    it('should exclude ignored materials unless includeIgnored is set', async () => {
+      const ignoredIngot = { ...ingot, myPrice: 200, anomalyIgnore: true };
+      repo.find.mockResolvedValue([ore, shard, ignoredIngot]);
+      partRepo.find.mockResolvedValue([
+        { ...hull, materials: [{ material: ignoredIngot, quantity: 2 }] },
+      ]);
+
+      const hidden = await service.findAnomalies();
+      expect(hidden.total).toBe(0);
+
+      const shown = await service.findAnomalies(true);
+      expect(shown.total).toBe(1);
+      expect(shown.items[0].id).toBe('ingot');
+      expect(shown.items[0].anomalyIgnore).toBe(true);
+    });
+
+    it('should save settings and clear caches', async () => {
+      const store = new Map<string, string>();
+      settingRepo.find.mockImplementation(async () =>
+        [...store.entries()].map(([key, value]) => ({ key, value })),
+      );
+      settingRepo.findOne.mockImplementation(async ({ where }: any) =>
+        store.has(where.key)
+          ? { key: where.key, value: store.get(where.key) }
+          : null,
+      );
+      settingRepo.insert.mockImplementation(async ({ key, value }: any) => {
+        store.set(key, value);
+      });
+      settingRepo.save.mockImplementation(async (entity: any) => {
+        store.set(entity.key, entity.value);
+        return entity;
+      });
+
+      const res = await service.updateAnomalyThresholds({
+        desiredDiff: 500,
+        desiredDiffOffset: 100,
+      });
+
+      expect(settingRepo.insert).toHaveBeenCalledWith({
+        key: 'anomalies.desiredDiff',
+        value: '500',
+      });
+      expect(settingRepo.insert).toHaveBeenCalledWith({
+        key: 'anomalies.desiredDiffOffset',
+        value: '100',
+      });
+      expect(cache.reset).toHaveBeenCalled();
+      expect(res).toEqual({ desiredDiff: 500, desiredDiffOffset: 100 });
     });
 
     it('should only list craftables used in submarine part crafting', async () => {
@@ -420,77 +563,6 @@ describe('PricesService', () => {
       const byId = new Map(res.items.map((i) => [i.id, i]));
       expect(byId.get('alloy')!.craftCount).toBe(2); // own craft + ingot's craft
       expect(byId.get('ingot')!.craftCount).toBe(1);
-    });
-
-    it('should honour a custom % threshold and a gil threshold (OR logic)', async () => {
-      repo.find.mockResolvedValue([ore, shard, ingot]);
-      partRepo.find.mockResolvedValue([
-        { ...hull, materials: [{ material: ingot, quantity: 2 }] },
-      ]);
-
-      // % set to 90 (16.67% dev is below it) but gil set to 40 (|diff|=50 is above it)
-      settingRepo.find.mockResolvedValue([
-        { key: 'anomalies.thresholdPct', value: '90' },
-        { key: 'anomalies.thresholdGil', value: '40' },
-      ]);
-
-      const res = await service.findAnomalies();
-
-      expect(res.thresholds).toEqual({ thresholdPct: 90, thresholdGil: 40 });
-      expect(res.items[0].isAnomaly).toBe(true); // flagged via the gil check
-      expect(res.anomalyCount).toBe(1);
-    });
-
-    it('should not flag when both thresholds are disabled', async () => {
-      repo.find.mockResolvedValue([ore, shard, ingot]);
-      partRepo.find.mockResolvedValue([
-        { ...hull, materials: [{ material: ingot, quantity: 2 }] },
-      ]);
-      settingRepo.find.mockResolvedValue([
-        { key: 'anomalies.thresholdPct', value: '' },
-        { key: 'anomalies.thresholdGil', value: '' },
-      ]);
-
-      const res = await service.findAnomalies();
-
-      expect(res.thresholds).toEqual({ thresholdPct: null, thresholdGil: null });
-      expect(res.items[0].isAnomaly).toBe(false);
-      expect(res.anomalyCount).toBe(0);
-    });
-
-    it('should save thresholds and clear caches', async () => {
-      const store = new Map<string, string>();
-      settingRepo.find.mockImplementation(async () =>
-        [...store.entries()].map(([key, value]) => ({ key, value })),
-      );
-      settingRepo.findOne.mockImplementation(async ({ where }: any) =>
-        store.has(where.key)
-          ? { key: where.key, value: store.get(where.key) }
-          : null,
-      );
-      settingRepo.insert.mockImplementation(async ({ key, value }: any) => {
-        store.set(key, value);
-      });
-      settingRepo.save.mockImplementation(async (entity: any) => {
-        store.set(entity.key, entity.value);
-        return entity;
-      });
-
-      const res = await service.updateAnomalyThresholds({
-        thresholdPct: 5,
-        thresholdGil: null,
-      });
-
-      expect(settingRepo.insert).toHaveBeenCalledWith({
-        key: 'anomalies.thresholdPct',
-        value: '5',
-      });
-      expect(settingRepo.insert).toHaveBeenCalledWith({
-        key: 'anomalies.thresholdGil',
-        value: '',
-      });
-      expect(cache.reset).toHaveBeenCalled();
-      expect(res).toEqual({ thresholdPct: 5, thresholdGil: null });
     });
 
     it('should mark craft costs as incomplete when an ingredient has no price', async () => {

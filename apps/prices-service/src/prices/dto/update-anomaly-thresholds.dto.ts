@@ -3,20 +3,21 @@ import { Type } from 'class-transformer';
 
 /**
  * Both fields are optional so callers can update one at a time.
- * Explicit null disables that check; a non-negative int enables it.
+ * Explicit null for desiredDiff disables flagging; a non-negative int sets it.
+ * desiredDiffOffset nulls are stored as 0 (no tolerance).
  */
 export class UpdateAnomalyThresholdsDto {
   @IsOptional()
-  @ValidateIf((o) => o.thresholdPct !== null)
+  @ValidateIf((o) => o.desiredDiff !== null)
   @IsInt()
   @Min(0)
   @Type(() => Number)
-  thresholdPct?: number | null;
+  desiredDiff?: number | null;
 
   @IsOptional()
-  @ValidateIf((o) => o.thresholdGil !== null)
+  @ValidateIf((o) => o.desiredDiffOffset !== null)
   @IsInt()
   @Min(0)
   @Type(() => Number)
-  thresholdGil?: number | null;
+  desiredDiffOffset?: number | null;
 }
