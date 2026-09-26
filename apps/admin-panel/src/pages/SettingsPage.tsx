@@ -243,14 +243,14 @@ export const SettingsPage: React.FC = () => {
         <div className="space-y-2 text-xs">
           <div>
             <label className="block text-slate-600 font-medium mb-1">Target Ingest Endpoint:</label>
-            <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 font-mono text-slate-700">
+            <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 font-mono text-slate-700 break-all">
               POST https://your-subdomain.domain/api/inventory/ingest
             </div>
           </div>
 
           <div>
             <label className="block text-slate-600 font-medium mb-1">Required Authentication Header:</label>
-            <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 font-mono text-slate-700">
+            <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 font-mono text-slate-700 break-all">
               X-API-Key: &lt;your_plugin_api_key&gt;
             </div>
           </div>

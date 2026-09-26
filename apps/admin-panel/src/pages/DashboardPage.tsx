@@ -165,7 +165,7 @@ export const DashboardPage: React.FC = () => {
               ))}
             </div>
 
-            <div className="flex items-center gap-4 lg:border-l lg:border-slate-200 lg:pl-5">
+            <div className="flex flex-wrap items-center gap-4 lg:border-l lg:border-slate-200 lg:pl-5">
               <div className="text-right">
                 <p className="text-[10px] uppercase tracking-wide text-slate-400">
                   All In-Progress
@@ -192,8 +192,8 @@ export const DashboardPage: React.FC = () => {
 
       {/* Live In-Progress Fabrication Section */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-6">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-          <div>
+        <div className="flex items-start justify-between gap-3 border-b border-slate-200 pb-4">
+          <div className="min-w-0">
             <h3 className="font-semibold text-slate-900 text-base flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 animate-ping"></span>
               Live Order Progress (In-Progress Builds)
@@ -202,7 +202,7 @@ export const DashboardPage: React.FC = () => {
               Refreshed automatically every 10 seconds. Live stock from your retainers vs ordered quantities.
             </p>
           </div>
-          <span className="text-xs px-2.5 py-1 rounded bg-slate-100 text-slate-500 font-mono">
+          <span className="text-xs px-2.5 py-1 rounded bg-slate-100 text-slate-500 font-mono flex-shrink-0">
             {orders.length} in crafting
           </span>
         </div>
@@ -238,9 +238,9 @@ export const DashboardPage: React.FC = () => {
                   className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4 hover:border-slate-300 transition"
                 >
                   {/* Order header */}
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="font-mono text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                           {order.orderCode}
                         </span>
@@ -262,7 +262,7 @@ export const DashboardPage: React.FC = () => {
                         )}
                       </p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right flex-shrink-0">
                       <span className="text-xs font-bold text-cyan-600">
                         {overallPct}%
                       </span>
@@ -345,7 +345,7 @@ export const DashboardPage: React.FC = () => {
                           {order.missingMaterials.map((mat) => (
                             <div
                               key={mat.materialId}
-                              className="flex items-center justify-between gap-2 text-xs"
+                              className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-xs"
                             >
                               <span className="text-slate-700 font-medium flex items-center gap-1.5 min-w-0">
                                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0"></span>
@@ -386,10 +386,10 @@ export const DashboardPage: React.FC = () => {
       {/* Total Parts Isle: every part the in-progress builds need crafted */}
       {orders.length > 0 && partTotals.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-start sm:items-center justify-between gap-3">
+            <div className="min-w-0">
               <h3 className="font-semibold text-slate-900 text-sm flex items-center gap-2">
-                <Hammer className="w-4 h-4 text-cyan-600" />
+                <Hammer className="w-4 h-4 text-cyan-600 flex-shrink-0" />
                 Total Parts — All In-Progress Builds
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
@@ -415,7 +415,7 @@ export const DashboardPage: React.FC = () => {
             {partTotals.map((p) => (
               <div
                 key={p.name}
-                className={`py-3 flex items-center justify-between gap-3 text-xs ${
+                className={`py-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-xs ${
                   p.toCraft > 0 ? '' : 'opacity-70'
                 }`}
               >
@@ -429,22 +429,22 @@ export const DashboardPage: React.FC = () => {
                     {p.name}
                   </span>
                   {p.partType && (
-                    <span className="text-[10px] text-slate-400 uppercase">
+                    <span className="text-[10px] text-slate-400 uppercase flex-shrink-0">
                       ({p.partType})
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <span className="text-slate-500 font-mono">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 justify-end sm:justify-start">
+                  <span className="text-slate-500 font-mono whitespace-nowrap">
                     need <strong className="text-slate-800">{formatNumber(p.ordered)}</strong>
                     {' · '}have <strong className="text-slate-800">{formatNumber(p.stock)}</strong>
                   </span>
                   {p.toCraft > 0 ? (
-                    <span className="font-mono px-2 py-0.5 rounded bg-cyan-50 border border-cyan-200 text-cyan-700 font-bold">
+                    <span className="font-mono px-2 py-0.5 rounded bg-cyan-50 border border-cyan-200 text-cyan-700 font-bold whitespace-nowrap">
                       Craft: {formatNumber(p.toCraft)}
                     </span>
                   ) : (
-                    <span className="font-mono px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold">
+                    <span className="font-mono px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold whitespace-nowrap">
                       Covered
                     </span>
                   )}
@@ -458,10 +458,10 @@ export const DashboardPage: React.FC = () => {
       {/* Combined Material Requirements Across All In-Progress Orders */}
       {orders.length > 0 && aggregateMaterials.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-start sm:items-center justify-between gap-3">
+            <div className="min-w-0">
               <h3 className="font-semibold text-slate-900 text-sm flex items-center gap-2">
-                <Boxes className="w-4 h-4 text-amber-600" />
+                <Boxes className="w-4 h-4 text-amber-600 flex-shrink-0" />
                 Materials Required — All In-Progress Orders
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
@@ -485,7 +485,7 @@ export const DashboardPage: React.FC = () => {
             {aggregateMaterials.map((mat) => (
               <div
                 key={mat.materialId}
-                className={`py-3 flex items-center justify-between gap-3 text-xs ${
+                className={`py-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-xs ${
                   mat.missing > 0 ? '' : 'opacity-70'
                 }`}
               >
@@ -495,17 +495,17 @@ export const DashboardPage: React.FC = () => {
                     {mat.name}
                   </span>
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <span className="text-slate-500 font-mono">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 justify-end sm:justify-start">
+                  <span className="text-slate-500 font-mono whitespace-nowrap">
                     need <strong className="text-slate-800">{formatNumber(mat.needed)}</strong>
                     {' · '}have <strong className="text-slate-800">{formatNumber(mat.available)}</strong>
                   </span>
                   {mat.missing > 0 ? (
-                    <span className="font-mono px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-bold">
+                    <span className="font-mono px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-bold whitespace-nowrap">
                       Missing: -{formatNumber(mat.missing)}
                     </span>
                   ) : (
-                    <span className="font-mono px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold">
+                    <span className="font-mono px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold whitespace-nowrap">
                       Covered
                     </span>
                   )}
@@ -539,17 +539,17 @@ export const DashboardPage: React.FC = () => {
           {(missingStock?.items ?? []).map((mat: any) => (
             <div
               key={mat.id}
-              className="py-3 flex items-center justify-between text-xs"
+              className="py-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-xs"
             >
-              <div>
+              <div className="min-w-0">
                 <span className="font-medium text-slate-800">{mat.name}</span>
                 <span className="text-slate-400 ml-2">({mat.whereToBuy})</span>
               </div>
-              <div className="flex items-center gap-4">
-                <span className="text-slate-500">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 justify-end sm:justify-start">
+                <span className="text-slate-500 whitespace-nowrap">
                   Stock: <strong className="text-slate-800">{formatNumber(mat.currentStock)}</strong> / {formatNumber(mat.desiredQuantity)}
                 </span>
-                <span className="font-mono px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-bold">
+                <span className="font-mono px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-bold whitespace-nowrap">
                   Deficit: -{formatNumber(mat.deficit)}
                 </span>
               </div>

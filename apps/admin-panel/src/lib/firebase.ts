@@ -3,6 +3,8 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   User,
@@ -58,8 +60,50 @@ export async function loginWithGoogle(): Promise<User> {
       'Firebase web config is missing. Set FIREBASE_API_KEY, FIREBASE_AUTH_DOMAIN, FIREBASE_PROJECT_ID, and FIREBASE_APP_ID on the admin-panel container.',
     );
   }
-  const result = await signInWithPopup(auth, googleProvider);
-  return result.user;
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    return result.user;
+  } catch (err) {
+    // Popups can be blocked in installed-PWA / standalone mode — fall back to a
+    // full-page redirect. onAuthStateChanged fires after the redirect completes.
+    const code = (err as { code?: string })?.code ?? '';
+    if (
+      code === 'auth/popup-blocked' ||
+      ((code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') &&
+        isStandalone())
+    ) {
+      await signInWithRedirect(auth, googleProvider);
+      // Redirect navigates away; resolve with a never-settling promise so the
+      // caller does not surface a spurious error while the page unloads.
+      return new Promise<User>(() => {});
+    }
+    throw err;
+  }
+}
+
+/** True when running as an installed PWA (standalone display). */
+export function isStandalone(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.matchMedia?.('(display-mode: standalone)').matches ||
+    // iOS Safari
+    (window.navigator as unknown as { standalone?: boolean }).standalone === true
+  );
+}
+
+/**
+ * Complete a redirect sign-in (must be called once on load). Returns the user
+ * or null; surfaces redirect errors to the caller.
+ */
+export async function completeRedirectSignIn(): Promise<User | null> {
+  try {
+    const result = await getRedirectResult(auth);
+    return result?.user ?? null;
+  } catch (err) {
+    const code = (err as { code?: string }).code ?? '';
+    if (code === 'auth/popup-blocked') return null;
+    throw err;
+  }
 }
 
 export async function logoutUser(): Promise<void> {

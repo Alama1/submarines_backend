@@ -96,11 +96,11 @@ export const PartSetsPanel: React.FC = () => {
   const sets = setData?.items ?? [];
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
+    <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 shadow-sm space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="min-w-0">
           <h3 className="font-semibold text-slate-900 text-base flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-emerald-600" />
+            <TrendingUp className="w-4 h-4 text-emerald-600 flex-shrink-0" />
             Set Profitability
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
@@ -110,7 +110,7 @@ export const PartSetsPanel: React.FC = () => {
         </div>
         <button
           onClick={openCreate}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs shadow-sm transition"
+          className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs shadow-sm transition flex-shrink-0"
         >
           <Plus className="w-3.5 h-3.5" />
           New Set
@@ -141,7 +141,7 @@ export const PartSetsPanel: React.FC = () => {
 
           <div className="space-y-2">
             {draftItems.map((item, idx) => (
-              <div key={idx} className="flex items-center gap-2">
+              <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-2">
                 <select
                   value={item.partId}
                   onChange={(e) => {
@@ -149,7 +149,7 @@ export const PartSetsPanel: React.FC = () => {
                     next[idx] = { ...next[idx], partId: e.target.value };
                     setDraftItems(next);
                   }}
-                  className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-emerald-500"
+                  className="w-full sm:flex-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-emerald-500"
                 >
                   <option value="">Select a part…</option>
                   {parts.map((p) => (
@@ -158,30 +158,32 @@ export const PartSetsPanel: React.FC = () => {
                     </option>
                   ))}
                 </select>
-                <input
-                  type="number"
-                  min={1}
-                  value={item.quantity}
-                  onChange={(e) => {
-                    const next = [...draftItems];
-                    next[idx] = {
-                      ...next[idx],
-                      quantity: Math.max(1, parseInt(e.target.value, 10) || 1),
-                    };
-                    setDraftItems(next);
-                  }}
-                  className="w-20 px-2 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-emerald-500"
-                />
-                <button
-                  onClick={() =>
-                    setDraftItems(draftItems.filter((_, i) => i !== idx))
-                  }
-                  disabled={draftItems.length === 1}
-                  className="p-2 rounded-lg bg-white border border-slate-300 text-slate-400 hover:text-rose-600 hover:border-rose-200 disabled:opacity-30 disabled:hover:text-slate-400 disabled:hover:border-slate-300"
-                  title="Remove part"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    value={item.quantity}
+                    onChange={(e) => {
+                      const next = [...draftItems];
+                      next[idx] = {
+                        ...next[idx],
+                        quantity: Math.max(1, parseInt(e.target.value, 10) || 1),
+                      };
+                      setDraftItems(next);
+                    }}
+                    className="w-20 flex-shrink-0 px-2 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-emerald-500"
+                  />
+                  <button
+                    onClick={() =>
+                      setDraftItems(draftItems.filter((_, i) => i !== idx))
+                    }
+                    disabled={draftItems.length === 1}
+                    className="p-2 rounded-lg bg-white border border-slate-300 text-slate-400 hover:text-rose-600 hover:border-rose-200 disabled:opacity-30 disabled:hover:text-slate-400 disabled:hover:border-slate-300"
+                    title="Remove part"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -274,7 +276,7 @@ export const PartSetsPanel: React.FC = () => {
                   {set.items.map((item, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between gap-2 text-xs"
+                      className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-xs"
                     >
                       <span className="text-slate-700 font-medium truncate">
                         {item.partId ? (
@@ -305,8 +307,8 @@ export const PartSetsPanel: React.FC = () => {
                   ))}
                 </div>
 
-                <div className="border-t border-slate-200 pt-2.5 flex items-center justify-between">
-                  <div className="text-[11px] text-slate-500 font-mono">
+                <div className="border-t border-slate-200 pt-2.5 flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-[11px] text-slate-500 font-mono min-w-0">
                     Sale {formatGil(set.totalSale)} · Cost{' '}
                     {formatGil(set.totalMaterialCost)} · Margin{' '}
                     {set.profitMarginPct}%

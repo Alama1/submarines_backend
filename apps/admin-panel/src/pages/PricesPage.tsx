@@ -258,7 +258,8 @@ export const PricesPage: React.FC = () => {
         </span>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+      {/* Price Anomalies table — desktop */}
+      <div className="hidden md:block bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider">
@@ -436,6 +437,164 @@ export const PricesPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Price Anomalies — mobile cards */}
+      <div className="md:hidden bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm divide-y divide-slate-200">
+        {anomaliesLoading ? (
+          <div className="px-4 py-8 text-center text-slate-400 text-xs">Computing craft costs...</div>
+        ) : anomalyItems.length === 0 ? (
+          <div className="px-4 py-8 text-center text-slate-400 text-xs">
+            No craftable materials used in submarine parts yet. Define recipes and add the
+            materials to a submarine part to unlock craft-cost validation.
+          </div>
+        ) : (
+          anomalyItems.map((item) => {
+            const status = statusOf(item, anomalies?.thresholds ?? thresholdSettings);
+            const isExpanded = expandedAnomalyId === item.id;
+            return (
+              <div key={item.id} className="p-4 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-900 text-sm break-words flex flex-wrap items-center gap-1.5">
+                      {item.name}
+                      {item.anomalyIgnore && (
+                        <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-400 text-[9px] font-semibold uppercase">
+                          ignored
+                        </span>
+                      )}
+                      {item.itemId != null && (
+                        <span className="text-[10px] font-mono text-slate-400 font-normal">
+                          #{item.itemId}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
+                      <Hammer className="w-3 h-3" />
+                      {item.craftCount} crafts
+                    </div>
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold border whitespace-nowrap flex-shrink-0 ${status.cls}`}
+                  >
+                    {item.incomplete && <AlertTriangle className="w-3 h-3 inline mr-1 -mt-0.5" />}
+                    {status.label}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+                    <div className="text-[9px] uppercase tracking-wide text-slate-400">
+                      Craft Cost
+                    </div>
+                    <div className="font-mono text-xs font-bold text-sky-700">
+                      {formatGil(item.craftCost)}
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+                    <div className="text-[9px] uppercase tracking-wide text-slate-400">
+                      My Price
+                    </div>
+                    <div className="font-mono text-xs font-bold text-amber-600">
+                      {item.myPrice != null ? formatGil(item.myPrice) : '—'}
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+                    <div className="text-[9px] uppercase tracking-wide text-slate-400">
+                      Δ Gil
+                    </div>
+                    <div
+                      className={`font-mono text-xs font-bold ${
+                        item.diff == null
+                          ? 'text-slate-300'
+                          : item.diff > 0
+                            ? 'text-rose-600'
+                            : 'text-emerald-600'
+                      }`}
+                    >
+                      {item.diff == null ? '—' : `${item.diff > 0 ? '+' : ''}${formatGil(item.diff)}`}
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+                    <div className="text-[9px] uppercase tracking-wide text-slate-400">Δ %</div>
+                    <div
+                      className={`font-mono text-xs font-bold ${
+                        item.diffPct == null
+                          ? 'text-slate-300'
+                          : item.isAnomaly
+                            ? 'text-rose-600'
+                            : 'text-slate-500'
+                      }`}
+                    >
+                      {item.diffPct == null
+                        ? '—'
+                        : `${item.diffPct > 0 ? '+' : ''}${item.diffPct.toFixed(1)}%`}
+                    </div>
+                  </div>
+                </div>
+
+                {isExpanded && (
+                  <div className="bg-slate-50/60 border border-slate-200 rounded-lg p-3 space-y-1">
+                    {item.ingredients.map((ing) => (
+                      <div
+                        key={ing.ingredientMaterialId}
+                        className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]"
+                      >
+                        <span className="font-mono text-slate-500">x{ing.quantity}</span>
+                        <span className="font-medium text-slate-700">{ing.name}</span>
+                        {ing.crafted && (
+                          <span
+                            className="px-1 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-700 text-[9px] font-semibold uppercase flex items-center gap-0.5"
+                            title="Crafted ingredient — valued at min(buy, craft cost)"
+                          >
+                            <Hammer className="w-2.5 h-2.5" /> crafted
+                          </span>
+                        )}
+                        <span className="text-slate-400 ml-auto font-mono">
+                          {formatGil(ing.unitCost)} = {formatGil(ing.totalCost)}
+                        </span>
+                      </div>
+                    ))}
+                    <div className="pt-1 mt-1 border-t border-slate-200 flex items-center justify-end gap-2 text-[11px] font-semibold">
+                      <span className="text-slate-500">Total craft cost:</span>
+                      <span className="font-mono text-sky-700">{formatGil(item.craftCost)}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={() => ignoreMutation.mutate({ id: item.id, ignore: !item.anomalyIgnore })}
+                    disabled={ignoreMutation.isPending}
+                    className={`flex items-center gap-1.5 flex-1 px-3 py-1.5 rounded-lg border text-xs font-medium transition ${
+                      item.anomalyIgnore
+                        ? 'bg-slate-100 border-slate-300 text-slate-600 hover:bg-slate-200'
+                        : 'bg-white border-slate-300 text-slate-400 hover:bg-slate-50 hover:text-slate-600'
+                    }`}
+                  >
+                    {item.anomalyIgnore ? (
+                      <Eye className="w-3.5 h-3.5" />
+                    ) : (
+                      <EyeOff className="w-3.5 h-3.5" />
+                    )}
+                    {item.anomalyIgnore ? 'Unignore' : 'Ignore'}
+                  </button>
+                  <button
+                    onClick={() => setExpandedAnomalyId(isExpanded ? null : item.id)}
+                    className="flex items-center justify-center gap-1.5 flex-1 px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-500 text-xs font-medium transition"
+                  >
+                    {isExpanded ? (
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    )}
+                    Breakdown
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900 mb-1">Market Pricing &amp; Valuation</h2>
@@ -444,22 +603,22 @@ export const PricesPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="relative">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+          <div className="relative w-full sm:w-52">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Filter items..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 pr-4 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 w-52"
+              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500"
             />
           </div>
 
           <button
             onClick={() => refreshMutation.mutate()}
             disabled={refreshMutation.isPending}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs shadow-sm transition disabled:opacity-50"
+            className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs shadow-sm transition disabled:opacity-50 flex-shrink-0"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
             <span>Sync Universalis</span>
@@ -467,8 +626,8 @@ export const PricesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Prices Table */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+      {/* Market Pricing table — desktop */}
+      <div className="hidden md:block bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider">
@@ -566,6 +725,106 @@ export const PricesPage: React.FC = () => {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Market Pricing — mobile cards */}
+      <div className="md:hidden bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm divide-y divide-slate-200">
+        {isLoading ? (
+          <div className="px-4 py-8 text-center text-slate-400 text-xs">
+            Loading pricing matrix...
+          </div>
+        ) : items.length === 0 ? (
+          <div className="px-4 py-8 text-center text-slate-400 text-xs">
+            No priced materials found.
+          </div>
+        ) : (
+          items.map((mat) => {
+            const isEditing = editingId === mat.id;
+
+            return (
+              <div key={mat.id} className="p-4 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-semibold text-slate-900 text-sm break-words min-w-0">
+                    {mat.name}
+                  </div>
+                  {isEditing ? (
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        onClick={() => saveEdit(mat.id)}
+                        className="p-2 rounded bg-emerald-600 hover:bg-emerald-700 text-white"
+                        title="Save"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className="p-2 rounded bg-white border border-slate-300 hover:bg-slate-50 text-slate-500"
+                        title="Cancel"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => startEdit(mat)}
+                      className="p-2 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition flex-shrink-0"
+                      title="Edit Custom Price"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {isEditing ? (
+                  <input
+                    type="number"
+                    placeholder="Clear to reset"
+                    value={myPriceVal}
+                    onChange={(e) =>
+                      setMyPriceVal(e.target.value === '' ? '' : parseInt(e.target.value))
+                    }
+                    className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-xs text-slate-900"
+                  />
+                ) : null}
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+                    <div className="text-[9px] uppercase tracking-wide text-slate-400">
+                      Market Price
+                    </div>
+                    <div className="font-mono text-xs font-bold text-slate-600">
+                      {formatGil(mat.marketPrice)}
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+                    <div className="text-[9px] uppercase tracking-wide text-slate-400">
+                      My Override
+                    </div>
+                    <div className="font-mono text-xs font-bold text-amber-600">
+                      {mat.myPrice != null ? formatGil(mat.myPrice) : '—'}
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+                    <div className="text-[9px] uppercase tracking-wide text-slate-400">
+                      NPC Vendor
+                    </div>
+                    <div className="font-mono text-xs font-bold text-slate-500">
+                      {formatGil(mat.npcPrice)}
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+                    <div className="text-[9px] uppercase tracking-wide text-slate-400">
+                      Effective
+                    </div>
+                    <div className="font-mono text-xs font-bold text-emerald-600">
+                      {formatGil(mat.effectivePrice)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );

@@ -103,8 +103,8 @@ export const DiscountsPage: React.FC = () => {
           </form>
         </div>
 
-        {/* Existing Tiers List */}
-        <div className="md:col-span-2 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+        {/* Existing Tiers List — desktop table */}
+        <div className="hidden md:block md:col-span-2 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider">
               <tr>
@@ -149,6 +149,39 @@ export const DiscountsPage: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Existing Tiers — mobile cards */}
+        <div className="md:hidden bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm divide-y divide-slate-200">
+          {isLoading ? (
+            <div className="px-4 py-8 text-center text-slate-400 text-xs">
+              Loading discount tiers...
+            </div>
+          ) : discountList.length === 0 ? (
+            <div className="px-4 py-8 text-center text-slate-400 text-xs">
+              No discount tiers defined.
+            </div>
+          ) : (
+            discountList.map((tier) => (
+              <div key={tier.id} className="p-4 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-mono font-bold text-slate-900 text-sm">
+                    ≥ {tier.threshold} parts
+                  </div>
+                  <div className="font-mono text-emerald-600 font-bold text-sm mt-0.5">
+                    {tier.discountPercent}% OFF
+                  </div>
+                </div>
+                <button
+                  onClick={() => deleteMutation.mutate(tier.id)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 text-xs font-medium transition flex-shrink-0"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete
+                </button>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

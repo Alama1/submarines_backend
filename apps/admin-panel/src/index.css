@@ -6,6 +6,27 @@
   body {
     @apply bg-slate-100 text-slate-900;
   }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Prevent iOS Safari auto-zoom when focusing small form controls on phones */
+@media (max-width: 640px) {
+  input[type='text'],
+  input[type='number'],
+  input[type='search'],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Never let a wide child push the page horizontally on small screens */
+html,
+body {
+  overflow-x: hidden;
 }
 
 /* Custom scrollbar for tables */

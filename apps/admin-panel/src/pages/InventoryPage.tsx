@@ -65,6 +65,9 @@ const BlurInput: React.FC<{
 const inlineInputClass =
   'w-20 px-2 py-1 bg-white border border-slate-300 rounded text-xs text-slate-900 font-mono focus:outline-none focus:border-emerald-500';
 
+const fullWidthInputClass =
+  'w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-xs text-slate-900 font-mono text-center focus:outline-none focus:border-emerald-500';
+
 /** Overview of every active claim, grouped by person, with quick cancel */
 const ClaimsOverview: React.FC = () => {
   const queryClient = useQueryClient();
@@ -100,13 +103,13 @@ const ClaimsOverview: React.FC = () => {
   const groups = [...byPerson.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-cyan-50 border border-cyan-200 flex items-center justify-center text-cyan-600">
+    <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 shadow-sm space-y-4">
+      <div className="flex items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-8 h-8 rounded-lg bg-cyan-50 border border-cyan-200 flex items-center justify-center text-cyan-600 flex-shrink-0">
             <Users className="w-4 h-4" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h3 className="font-semibold text-slate-900 text-sm">Material Claims</h3>
             <p className="text-xs text-slate-500">
               Everything currently pledged by your crafters — cancel claims here once
@@ -115,7 +118,7 @@ const ClaimsOverview: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-shrink-0">
           {claims.length > 0 && (
             <span className="text-xs px-2.5 py-1 rounded bg-cyan-50 border border-cyan-200 text-cyan-700 font-bold">
               {claims.length} claim{claims.length === 1 ? '' : 's'} ·{' '}
@@ -256,7 +259,7 @@ const ClaimsModal: React.FC<ClaimsModalProps> = ({ materialId, materialName, onC
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white border border-slate-200 rounded-xl max-w-lg w-full shadow-2xl relative">
+      <div className="bg-white border border-slate-200 rounded-xl max-w-lg w-full shadow-2xl relative max-h-[92vh] overflow-y-auto">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
@@ -275,7 +278,7 @@ const ClaimsModal: React.FC<ClaimsModalProps> = ({ materialId, materialName, onC
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-2 mt-4 text-center">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 text-center">
             <div className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-2">
               <div className="text-[10px] uppercase tracking-wide text-slate-400">Needed</div>
               <div className="text-sm font-bold text-slate-900 font-mono">
@@ -345,30 +348,32 @@ const ClaimsModal: React.FC<ClaimsModalProps> = ({ materialId, materialName, onC
           {/* Add claim form */}
           <form onSubmit={handleSubmit} className="pt-3 border-t border-slate-200 space-y-3">
             <label className="block text-xs font-semibold text-slate-700">Add a claim</label>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="text"
                 placeholder="Person name"
                 value={person}
                 onChange={(e) => setPerson(e.target.value)}
-                className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500"
+                className="w-full sm:flex-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500"
               />
-              <input
-                type="number"
-                min={1}
-                placeholder="Qty"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value === '' ? '' : parseInt(e.target.value))}
-                className="w-24 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 font-mono placeholder:text-slate-400 focus:outline-none focus:border-emerald-500"
-              />
-              <button
-                type="submit"
-                disabled={createClaimMutation.isPending || !person.trim() || quantity === '' || Number(quantity) < 1}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition disabled:opacity-50"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>{createClaimMutation.isPending ? 'Adding...' : 'Claim'}</span>
-              </button>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  placeholder="Qty"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value === '' ? '' : parseInt(e.target.value))}
+                  className="w-20 flex-1 sm:flex-none sm:w-24 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 font-mono placeholder:text-slate-400 focus:outline-none focus:border-emerald-500"
+                />
+                <button
+                  type="submit"
+                  disabled={createClaimMutation.isPending || !person.trim() || quantity === '' || Number(quantity) < 1}
+                  className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition disabled:opacity-50 flex-1 sm:flex-none"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{createClaimMutation.isPending ? 'Adding...' : 'Claim'}</span>
+                </button>
+              </div>
             </div>
             <p className="text-[10px] text-slate-400">
               Claims are displayed on the public website next to what the workshop needs.
@@ -504,21 +509,21 @@ export const InventoryPage: React.FC = () => {
         </div>
 
         {/* Search & Filter Bar */}
-        <div className="flex items-center gap-3">
-          <div className="relative">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+          <div className="relative w-full sm:w-56">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Search materials..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 pr-4 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 w-56"
+              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500"
             />
           </div>
 
           <button
             onClick={() => setOnlyMissing(!onlyMissing)}
-            className={`px-3 py-2 rounded-lg text-xs font-medium border transition flex items-center gap-1.5 ${
+            className={`px-3 py-2 rounded-lg text-xs font-medium border transition flex items-center justify-center gap-1.5 flex-shrink-0 ${
               onlyMissing
                 ? 'bg-rose-50 border-rose-200 text-rose-700'
                 : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'
@@ -574,13 +579,13 @@ export const InventoryPage: React.FC = () => {
 
       {/* ── Submarine Crafting Goals & Fleet Target Planner ── */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-        <div className="p-4 bg-slate-50/60 border-b border-slate-200 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
+        <div className="p-4 bg-slate-50/60 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 flex-shrink-0">
               <Layers className="w-4 h-4" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
                 <h3 className="font-bold text-slate-900 text-xs">Submarine Crafting Goals & Target Planner</h3>
                 <span className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 font-mono text-[10px] font-semibold">
                   {totalTargetedParts} Total Parts Targeted
@@ -592,11 +597,11 @@ export const InventoryPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <button
               onClick={() => recalculateTargetsMutation.mutate()}
               disabled={recalculateTargetsMutation.isPending}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-sm transition disabled:opacity-50"
+              className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-sm transition disabled:opacity-50 flex-1 sm:flex-none"
               title="Recalculate and update material targets"
             >
               <Hammer className="w-3.5 h-3.5" />
@@ -661,8 +666,8 @@ export const InventoryPage: React.FC = () => {
         )}
       </div>
 
-      {/* Inventory Table */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+      {/* Inventory Table — desktop */}
+      <div className="hidden md:block bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider">
@@ -773,6 +778,95 @@ export const InventoryPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Inventory — mobile cards */}
+      <div className="md:hidden bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm divide-y divide-slate-200">
+        {isLoading ? (
+          <div className="px-4 py-8 text-center text-slate-400 text-xs">Loading inventory...</div>
+        ) : items.length === 0 ? (
+          <div className="px-4 py-8 text-center text-slate-400 text-xs">No materials found.</div>
+        ) : (
+          items.map((mat) => {
+            const hasDeficit = mat.currentStock < mat.desiredQuantity;
+            const isNpc = mat.whereToBuy === 'NPC';
+
+            return (
+              <div key={mat.id} className={`p-4 space-y-3 ${hasDeficit ? 'bg-rose-50/50' : ''}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-slate-900 break-words">
+                      {mat.name}
+                    </div>
+                    <div className="text-[10px] font-mono text-slate-400">
+                      ID: {mat.itemId || '—'}
+                    </div>
+                  </div>
+                  {hasDeficit ? (
+                    <span className="font-mono text-xs px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-semibold flex-shrink-0">
+                      -{formatNumber(mat.desiredQuantity - mat.currentStock)}
+                    </span>
+                  ) : (
+                    <span className="font-mono text-xs px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 flex-shrink-0">
+                      +OK
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="space-y-1">
+                    <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">
+                      Current Stock
+                    </span>
+                    {isNpc ? (
+                      <span
+                        className="block w-full text-center font-mono text-[10px] px-2 py-1.5 rounded bg-violet-50 border border-violet-200 text-violet-700 font-semibold"
+                        title="NPC-sourced — stock is always maxed out"
+                      >
+                        MAX
+                      </span>
+                    ) : (
+                      <BlurInput
+                        value={mat.currentStock}
+                        onCommit={(v) => updateStockMutation.mutate({ id: mat.id, stock: v })}
+                        className={`${fullWidthInputClass} ${
+                          hasDeficit ? 'text-rose-600 font-bold' : 'text-emerald-600 font-bold'
+                        }`}
+                      />
+                    )}
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-[10px] uppercase tracking-wider text-cyan-600 font-semibold block">
+                      Desired Target
+                    </span>
+                    <BlurInput
+                      value={mat.desiredQuantity}
+                      onCommit={(v) => updateTargetMutation.mutate({ id: mat.id, desiredQuantity: v })}
+                      className={`${fullWidthInputClass} text-slate-700`}
+                    />
+                  </label>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${sourceBadgeClass(mat.whereToBuy)}`}>
+                    {mat.whereToBuy}
+                  </span>
+                  <button
+                    onClick={() => setClaimsModal({ id: mat.id, name: mat.name })}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition ${
+                      hasDeficit
+                        ? 'bg-cyan-50 border-cyan-200 text-cyan-600 hover:bg-cyan-100'
+                        : 'bg-white border-slate-300 text-slate-400 hover:bg-slate-50'
+                    }`}
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    Claims
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
       {/* ── Repair & Utility Materials (kept out of crafting inventory) ── */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
         <div className="p-4 bg-slate-50/60 border-b border-slate-200 flex items-center gap-2.5">
@@ -787,7 +881,7 @@ export const InventoryPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider">
               <tr>
@@ -857,6 +951,75 @@ export const InventoryPage: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Repair materials — mobile cards */}
+        <div className="md:hidden divide-y divide-slate-200 border-t border-slate-200">
+          {repairLoading ? (
+            <div className="px-4 py-8 text-center text-slate-400 text-xs">
+              Loading repair materials...
+            </div>
+          ) : repairItems.length === 0 ? (
+            <div className="px-4 py-8 text-center text-slate-400 text-xs">
+              No repair materials registered. Set a material's category to "Repair Supply" in the
+              Recipes page to move it here.
+            </div>
+          ) : (
+            repairItems.map((mat) => {
+              const isNpc = mat.whereToBuy === 'NPC';
+
+              return (
+                <div key={mat.id} className="p-4 space-y-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-slate-900 break-words">
+                      {mat.name}
+                    </div>
+                    <div className="text-[10px] font-mono text-slate-400">
+                      ID: {mat.itemId || '—'}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="space-y-1">
+                      <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">
+                        Current Stock
+                      </span>
+                      {isNpc ? (
+                        <span
+                          className="block w-full text-center font-mono text-[10px] px-2 py-1.5 rounded bg-violet-50 border border-violet-200 text-violet-700 font-semibold"
+                          title="NPC-sourced — stock is always maxed out"
+                        >
+                          MAX
+                        </span>
+                      ) : (
+                        <BlurInput
+                          value={mat.currentStock}
+                          onCommit={(v) => updateStockMutation.mutate({ id: mat.id, stock: v })}
+                          className={`${fullWidthInputClass} text-emerald-600 font-bold`}
+                        />
+                      )}
+                    </label>
+                    <label className="space-y-1">
+                      <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">
+                        Desired Target
+                      </span>
+                      <BlurInput
+                        value={mat.desiredQuantity}
+                        onCommit={(v) => updateTargetMutation.mutate({ id: mat.id, desiredQuantity: v })}
+                        className={`${fullWidthInputClass} text-slate-700`}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${sourceBadgeClass(mat.whereToBuy)}`}>
+                      {mat.whereToBuy}
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 

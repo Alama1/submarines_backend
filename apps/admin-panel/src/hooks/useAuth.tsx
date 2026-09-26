@@ -1,5 +1,12 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, auth, loginWithGoogle, logoutUser, onAuthStateChanged } from '../lib/firebase';
+import {
+  User,
+  auth,
+  loginWithGoogle,
+  logoutUser,
+  onAuthStateChanged,
+  completeRedirectSignIn,
+} from '../lib/firebase';
 import { api } from '../lib/api';
 
 interface AuthContextType {
@@ -44,6 +51,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(currentUser);
       setLoading(false);
     });
+
+    // Complete a redirect sign-in (installed-PWA fallback path). Any resulting
+    // error is surfaced through authError; onAuthStateChanged handles success.
+    completeRedirectSignIn().catch((err: unknown) => {
+      setAuthError(
+        err instanceof Error ? err.message : 'Google sign-in redirect failed',
+      );
+    });
+
     return () => unsubscribe();
   }, []);
 

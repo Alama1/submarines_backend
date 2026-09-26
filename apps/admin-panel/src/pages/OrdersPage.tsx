@@ -159,12 +159,12 @@ export const OrdersPage: React.FC = () => {
       </div>
 
       {/* Filter Tabs — pending orders are hidden until activated by code */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-3 overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
         {['active', 'all', 'confirmed', 'in_progress', 'finished', 'fulfilled', 'cancelled'].map((tab) => (
           <button
             key={tab}
             onClick={() => setStatusFilter(tab)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition whitespace-nowrap flex-shrink-0 ${
               statusFilter === tab
                 ? 'bg-slate-900 text-white font-semibold'
                 : 'text-slate-500 hover:text-slate-900'
@@ -175,8 +175,8 @@ export const OrdersPage: React.FC = () => {
         ))}
       </div>
 
-      {/* Orders Table */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+      {/* Orders Table — desktop */}
+      <div className="hidden md:block bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider">
@@ -293,10 +293,128 @@ export const OrdersPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Orders — mobile cards */}
+      <div className="md:hidden bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm divide-y divide-slate-200">
+        {isLoading ? (
+          <div className="px-4 py-8 text-center text-slate-400 text-xs">Loading orders...</div>
+        ) : orders.length === 0 ? (
+          <div className="px-4 py-8 text-center text-slate-400 text-xs">
+            No orders found matching this filter.
+          </div>
+        ) : (
+          orders.map((order) => (
+            <div key={order.id} className="p-4 space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <span className="font-mono text-sm font-bold text-emerald-600 break-all">
+                  {order.orderCode}
+                </span>
+                <StatusBadge status={order.status} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 text-xs">
+                <div className="min-w-0">
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+                    Client
+                  </div>
+                  <div className="font-semibold text-slate-900 truncate">
+                    {order.clientName}
+                  </div>
+                  {order.contactInfo && (
+                    <div className="text-[11px] text-slate-400 truncate">{order.contactInfo}</div>
+                  )}
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+                    Date
+                  </div>
+                  <div className="text-slate-500">
+                    {new Date(order.createdAt).toLocaleDateString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+                    Total (Gil)
+                  </div>
+                  <div className="font-mono text-slate-800">{formatGil(order.total)}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+                    Items
+                  </div>
+                  <div className="text-slate-600">{(order.items ?? []).length} parts</div>
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-1">
+                  Fulfillment
+                </div>
+                {order.fulfillmentDt ? (
+                  <span className="inline-flex items-center rounded-md bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                    {order.fulfillmentDt}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                    ASAP
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 pt-2.5 border-t border-slate-100">
+                <button
+                  onClick={() => setSelectedOrder(order)}
+                  className="p-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-500 transition flex-shrink-0"
+                  title="View Details"
+                >
+                  <Eye className="w-4 h-4" />
+                </button>
+
+                {isActiveOrder(order.status) && (
+                  <button
+                    onClick={() => openEdit(order)}
+                    className="p-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-500 hover:text-emerald-600 transition flex-shrink-0"
+                    title="Edit Order"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                )}
+
+                <select
+                  value={order.status}
+                  disabled={statusMutation.isPending}
+                  onChange={(e) =>
+                    statusMutation.mutate({ id: order.id, status: e.target.value as OrderStatus })
+                  }
+                  className={`${statusSelectClass} min-w-0 flex-1`}
+                  title="Set Status"
+                >
+                  {STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+
+                {(order.status === 'pending' || order.status === 'confirmed') && (
+                  <button
+                    onClick={() => cancelMutation.mutate(order.id)}
+                    disabled={cancelMutation.isPending}
+                    className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition flex-shrink-0"
+                    title="Cancel Order"
+                  >
+                    <XCircle className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
       {/* Order Detail Modal — uses the live row from the list so status updates in place */}
       {modalOrder && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-xl max-w-2xl w-full p-6 shadow-2xl relative space-y-6">
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white border border-slate-200 rounded-xl max-w-2xl w-full p-4 sm:p-6 shadow-2xl relative space-y-6 max-h-[92vh] overflow-y-auto">
             <button
               onClick={() => setSelectedOrder(null)}
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
@@ -341,7 +459,7 @@ export const OrdersPage: React.FC = () => {
                 {(modalOrder.items ?? []).map((item, idx) => (
                   <div
                     key={idx}
-                    className="p-3 flex items-center justify-between text-xs"
+                    className="p-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs"
                   >
                     <div>
                       <span className="font-medium text-slate-800">{item.partName}</span>
@@ -420,8 +538,8 @@ export const OrdersPage: React.FC = () => {
 
       {/* Edit Order Modal — only for active orders; totals recalculated server-side */}
       {editingOrder && draft && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-xl max-w-2xl w-full p-6 shadow-2xl relative space-y-5 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white border border-slate-200 rounded-xl max-w-2xl w-full p-4 sm:p-6 shadow-2xl relative space-y-5 max-h-[92vh] overflow-y-auto">
             <button
               onClick={closeEdit}
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
@@ -497,11 +615,11 @@ export const OrdersPage: React.FC = () => {
               </div>
               <div className="space-y-2">
                 {draft.items.map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
+                  <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-2">
                     <select
                       value={item.partId}
                       onChange={(e) => setDraftItem(idx, { partId: e.target.value })}
-                      className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-emerald-500"
+                      className="w-full sm:flex-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-emerald-500"
                     >
                       <option value="">Select a part…</option>
                       {parts.map((p) => (
@@ -510,40 +628,42 @@ export const OrdersPage: React.FC = () => {
                         </option>
                       ))}
                     </select>
-                    <input
-                      type="text"
-                      placeholder="Build"
-                      value={item.buildName}
-                      onChange={(e) => setDraftItem(idx, { buildName: e.target.value })}
-                      className="w-28 px-2 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500"
-                    />
-                    <input
-                      type="number"
-                      min={1}
-                      value={item.quantity}
-                      onChange={(e) =>
-                        setDraftItem(idx, {
-                          quantity: Math.max(1, parseInt(e.target.value, 10) || 1),
-                        })
-                      }
-                      className="w-20 px-2 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-emerald-500"
-                    />
-                    <button
-                      onClick={() =>
-                        setDraft({
-                          ...draft,
-                          items: draft.items.filter((_, i) => i !== idx),
-                        })
-                      }
-                      className="p-2 rounded-lg bg-white border border-slate-300 text-slate-400 hover:text-rose-600 hover:border-rose-200 transition"
-                      title="Remove item"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="Build"
+                        value={item.buildName}
+                        onChange={(e) => setDraftItem(idx, { buildName: e.target.value })}
+                        className="flex-1 min-w-0 sm:flex-none sm:w-28 px-2 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500"
+                      />
+                      <input
+                        type="number"
+                        min={1}
+                        value={item.quantity}
+                        onChange={(e) =>
+                          setDraftItem(idx, {
+                            quantity: Math.max(1, parseInt(e.target.value, 10) || 1),
+                          })
+                        }
+                        className="w-20 flex-shrink-0 px-2 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-emerald-500"
+                      />
+                      <button
+                        onClick={() =>
+                          setDraft({
+                            ...draft,
+                            items: draft.items.filter((_, i) => i !== idx),
+                          })
+                        }
+                        className="p-2 rounded-lg bg-white border border-slate-300 text-slate-400 hover:text-rose-600 hover:border-rose-200 transition flex-shrink-0"
+                        title="Remove item"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <button
                   onClick={() =>
                     setDraft({
