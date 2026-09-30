@@ -6,7 +6,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheModule } from '@nestjs/cache-manager';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { InternalTokenGuard } from '@ff14/internal-auth';
-import { BaseMaterial, MaterialClaim, MaterialIngredient, PartMaterial, SubmarinePart } from '@ff14/entities';
+import { BaseMaterial, CharacterInventory, MaterialClaim, MaterialIngredient, PartMaterial, RetainerInventory, SubmarinePart } from '@ff14/entities';
 import { HealthController } from './health/health.controller';
 import { InventoryModule } from './inventory/inventory.module';
 
@@ -29,7 +29,7 @@ import { InventoryModule } from './inventory/inventory.module';
           database: cfg.get<string>('POSTGRES_DB', 'ff14_db'),
           username: cfg.get<string>('POSTGRES_USER', 'ff14'),
           password,
-          entities: [BaseMaterial, MaterialClaim, MaterialIngredient, PartMaterial, SubmarinePart],
+          entities: [BaseMaterial, MaterialClaim, MaterialIngredient, PartMaterial, SubmarinePart, CharacterInventory, RetainerInventory],
           migrations: [join(__dirname, '../../..', 'packages/entities/dist/migrations/*.js')],
           migrationsRun: true,
           namingStrategy: new SnakeNamingStrategy(),

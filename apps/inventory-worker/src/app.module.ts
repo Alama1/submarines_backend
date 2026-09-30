@@ -4,7 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheModule } from '@nestjs/cache-manager';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
-import { BaseMaterial, MaterialIngredient, PartMaterial, SubmarinePart } from '@ff14/entities';
+import { BaseMaterial, CharacterInventory, MaterialIngredient, PartMaterial, RetainerInventory, SubmarinePart } from '@ff14/entities';
 import { ConsumersModule } from './consumers/consumers.module';
 
 @Module({
@@ -26,7 +26,7 @@ import { ConsumersModule } from './consumers/consumers.module';
           database: cfg.get<string>('POSTGRES_DB', 'ff14_db'),
           username: cfg.get<string>('POSTGRES_USER', 'ff14'),
           password,
-          entities: [BaseMaterial, MaterialIngredient, PartMaterial, SubmarinePart],
+          entities: [BaseMaterial, MaterialIngredient, PartMaterial, SubmarinePart, CharacterInventory, RetainerInventory],
           migrations: [join(__dirname, '../../..', 'packages/entities/dist/migrations/*.js')],
           migrationsRun: true,
           namingStrategy: new SnakeNamingStrategy(),

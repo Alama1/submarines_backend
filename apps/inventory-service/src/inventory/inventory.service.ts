@@ -11,12 +11,16 @@ import { ClientProxy } from '@nestjs/microservices';
 import { createEnvelope } from '@ff14/internal-auth';
 import {
   BaseMaterial,
+  characterKeyOf,
+  CharacterInventory,
   MaterialCategory,
   MaterialClaim,
   MaterialSource,
+  RetainerInventory,
+  StoredBag,
   SubmarinePart,
 } from '@ff14/entities';
-import { IngestDto } from './dto/ingest.dto';
+import { IngestDto, PluginBagDto, PluginRetainerDto } from './dto/ingest.dto';
 import { UpdateStockDto } from './dto/update-stock.dto';
 import { UpdateTargetDto } from './dto/update-target.dto';
 import { CreateClaimDto } from './dto/create-claim.dto';
@@ -55,6 +59,14 @@ export interface MissingMaterialItem extends InventoryItemStock {
   claims: MaterialClaimSummary[];
 }
 
+export interface IngestResponse {
+  status: string;
+  source: string;
+  characterCached: boolean;
+  retainersCached: number;
+  staleSkipped: number;
+}
+
 @Injectable()
 export class InventoryService {
   constructor(
@@ -62,6 +74,10 @@ export class InventoryService {
     private readonly repo: Repository<BaseMaterial>,
     @InjectRepository(MaterialClaim)
     private readonly claimRepo: Repository<MaterialClaim>,
+    @InjectRepository(CharacterInventory)
+    private readonly charInvRepo: Repository<CharacterInventory>,
+    @InjectRepository(RetainerInventory)
+    private readonly retainerInvRepo: Repository<RetainerInventory>,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
     @Inject('INVENTORY_RMQ_CLIENT') private readonly rmqClient: ClientProxy,
   ) {}
@@ -317,9 +333,192 @@ export class InventoryService {
     await this.claimRepo.remove(claim);
   }
 
-  async ingest(dto: IngestDto): Promise<{ status: string; source: string }> {
+  /**
+   * Ingest a plugin report into the server-side inventory cache.
+   *
+   * The cache is the source of truth and lives in the database, keyed per
+   * character and per retainer, so reports from any number of devices or
+   * characters merge instead of overwriting each other:
+   *  - the character inventory row is replaced only when the incoming scan is
+   *    newer than what is stored;
+   *  - each retainer row is replaced only when the incoming scan is newer
+   *    (protects against stale device-local retainer caches).
+   *
+   * New plugins send `characters[]` with one entry per cached character (each
+   * entry carrying that character's own retainers), so switching characters or
+   * machines never loses data. Older plugins send only the top-level
+   * character/retainer fields, which are handled as a single-character report.
+   *
+   * After persisting, the inventory worker recomputes stock levels from the
+   * whole cache (all characters + all retainers), not just this report.
+   */
+  async ingest(dto: IngestDto): Promise<IngestResponse> {
+    const reportedAt = this.parseTimestamp(dto.timestamp) ?? new Date();
+    const source = dto.characterName?.trim() || 'unknown';
+
+    let characterCached = false;
+    let retainersCached = 0;
+    let staleSkipped = 0;
+
+    for (const entry of this.buildCharacterEntries(dto, reportedAt)) {
+      const ownerKey = characterKeyOf(entry.characterName, entry.homeWorld);
+
+      const existing = await this.charInvRepo.findOne({
+        where: { characterKey: ownerKey },
+      });
+      if (existing && existing.lastReportedAt.getTime() >= entry.reportedAt.getTime()) {
+        staleSkipped++;
+      } else if (existing) {
+        existing.characterName = entry.characterName;
+        existing.homeWorld = entry.homeWorld ?? null;
+        existing.bags = entry.playerInventory ?? [];
+        existing.lastReportedAt = entry.reportedAt;
+        await this.charInvRepo.save(existing);
+        characterCached = true;
+      } else {
+        await this.charInvRepo.save(
+          this.charInvRepo.create({
+            characterKey: ownerKey,
+            characterName: entry.characterName,
+            homeWorld: entry.homeWorld ?? null,
+            bags: entry.playerInventory ?? [],
+            lastReportedAt: entry.reportedAt,
+          }),
+        );
+        characterCached = true;
+      }
+
+      for (const retainer of entry.retainers ?? []) {
+        const retainerId = this.normalizeRetainerId(retainer.retainerId);
+        if (!retainerId) continue;
+
+        const retainerUpdatedAt =
+          this.parseTimestamp(retainer.lastUpdated) ?? entry.reportedAt;
+        const existingRetainer = await this.retainerInvRepo.findOne({
+          where: { retainerId },
+        });
+        if (
+          existingRetainer &&
+          existingRetainer.lastReportedAt.getTime() >= retainerUpdatedAt.getTime()
+        ) {
+          staleSkipped++;
+          continue;
+        }
+
+        if (existingRetainer) {
+          existingRetainer.retainerName = retainer.retainerName;
+          existingRetainer.ownerKey = ownerKey;
+          existingRetainer.bags = (retainer.bags ?? []) as StoredBag[];
+          existingRetainer.lastReportedAt = retainerUpdatedAt;
+          await this.retainerInvRepo.save(existingRetainer);
+        } else {
+          await this.retainerInvRepo.save(
+            this.retainerInvRepo.create({
+              retainerId,
+              retainerName: retainer.retainerName,
+              ownerKey,
+              bags: (retainer.bags ?? []) as StoredBag[],
+              lastReportedAt: retainerUpdatedAt,
+            }),
+          );
+        }
+        retainersCached++;
+      }
+    }
+
     this.rmqClient.emit('inventory_ingest', createEnvelope(dto));
-    return { status: 'accepted', source: dto.characterName ?? 'unknown' };
+
+    return {
+      status: 'accepted',
+      source,
+      characterCached,
+      retainersCached,
+      staleSkipped,
+    };
+  }
+
+  /**
+   * Normalises a report into a list of per-character entries. Reports with a
+   * `characters` array are expanded as-is; legacy reports (top-level fields
+   * only) become a single entry.
+   */
+  private buildCharacterEntries(
+    dto: IngestDto,
+    reportedAt: Date,
+  ): Array<{
+    characterName: string;
+    homeWorld?: string;
+    reportedAt: Date;
+    playerInventory?: PluginBagDto[];
+    retainers?: PluginRetainerDto[];
+  }> {
+    if (dto.characters?.length) {
+      return dto.characters
+        .filter((c) => c.characterName?.trim())
+        .map((c) => ({
+          characterName: c.characterName.trim(),
+          homeWorld: c.homeWorld?.trim() || undefined,
+          reportedAt: this.parseTimestamp(c.timestamp) ?? reportedAt,
+          playerInventory: c.playerInventory,
+          retainers: c.retainers,
+        }));
+    }
+
+    const name = dto.characterName?.trim();
+    if (!name) return [];
+
+    return [
+      {
+        characterName: name,
+        homeWorld: dto.homeWorld?.trim() || undefined,
+        reportedAt,
+        playerInventory: dto.playerInventory,
+        retainers: dto.retainers,
+      },
+    ];
+  }
+
+  private parseTimestamp(value?: string): Date | null {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  /** Accepts string digits (preferred) or number (legacy); returns bigint-as-string. */
+  private normalizeRetainerId(value: unknown): string | null {
+    if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
+      return BigInt(value.trim()).toString();
+    }
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+      return BigInt(Math.trunc(value)).toString();
+    }
+    return null;
+  }
+
+  async findCachedCharacters(): Promise<CharacterInventory[]> {
+    return this.charInvRepo.find({ order: { lastReportedAt: 'DESC' } });
+  }
+
+  async findCachedRetainers(): Promise<RetainerInventory[]> {
+    return this.retainerInvRepo.find({ order: { lastReportedAt: 'DESC' } });
+  }
+
+  async deleteCachedCharacter(id: string): Promise<void> {
+    const row = await this.charInvRepo.findOne({ where: { id } });
+    if (!row) throw new NotFoundException(`Cached character "${id}" not found`);
+    await this.charInvRepo.remove(row);
+    this.rmqClient.emit('inventory_ingest', createEnvelope({}));
+  }
+
+  async deleteCachedRetainer(retainerId: string): Promise<void> {
+    const row = await this.retainerInvRepo.findOne({
+      where: { retainerId },
+    });
+    if (!row) {
+      throw new NotFoundException(`Cached retainer "${retainerId}" not found`);
+    }
+    await this.retainerInvRepo.remove(row);
+    this.rmqClient.emit('inventory_ingest', createEnvelope({}));
   }
 
   async updateStock(id: string, dto: UpdateStockDto): Promise<InventoryItemStock> {

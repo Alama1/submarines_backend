@@ -1,6 +1,9 @@
 export { BaseMaterial } from './base-material.entity';
 export { MaterialSource, MaterialCategory } from './material-enums';
 export { MaterialClaim } from './material-claim.entity';
+export { CharacterInventory } from './character-inventory.entity';
+export { RetainerInventory } from './retainer-inventory.entity';
+export { StoredBag, StoredItem, characterKeyOf } from './inventory-cache.types';
 export { MaterialIngredient } from './material-ingredient.entity';
 export { AppSetting } from './app-setting.entity';
 export { PartMaterial } from './part-material.entity';

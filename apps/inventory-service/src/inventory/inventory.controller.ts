@@ -69,6 +69,28 @@ export class InventoryController {
     return this.svc.getNetWorth();
   }
 
+  @Get('cache/characters')
+  findCachedCharacters() {
+    return this.svc.findCachedCharacters();
+  }
+
+  @Get('cache/retainers')
+  findCachedRetainers() {
+    return this.svc.findCachedRetainers();
+  }
+
+  @Delete('cache/characters/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteCachedCharacter(@Param('id') id: string): Promise<void> {
+    return this.svc.deleteCachedCharacter(id);
+  }
+
+  @Delete('cache/retainers/:retainerId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteCachedRetainer(@Param('retainerId') retainerId: string): Promise<void> {
+    return this.svc.deleteCachedRetainer(retainerId);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.svc.findOne(id);

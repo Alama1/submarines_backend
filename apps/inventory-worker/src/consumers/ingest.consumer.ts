@@ -4,7 +4,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import { BaseMaterial, MaterialSource, SubmarinePart } from '@ff14/entities';
+import {
+  BaseMaterial,
+  CharacterInventory,
+  MaterialSource,
+  RetainerInventory,
+  StoredBag,
+  SubmarinePart,
+} from '@ff14/entities';
 import { readEnvelope } from '@ff14/internal-auth';
 
 interface PluginItem {
@@ -19,17 +26,17 @@ interface PluginBag {
   items: PluginItem[];
 }
 
-interface PluginRetainer {
-  retainerName: string;
-  bags: PluginBag[];
-}
-
 interface PluginIngestPayload {
   characterName?: string;
   homeWorld?: string;
   timestamp?: string;
   playerInventory?: PluginBag[];
   retainers?: PluginRetainer[];
+}
+
+interface PluginRetainer {
+  retainerName: string;
+  bags: PluginBag[];
 }
 
 const GIL_ITEM_ID = 1;
@@ -43,9 +50,22 @@ export class IngestConsumer {
     private readonly materialRepo: Repository<BaseMaterial>,
     @InjectRepository(SubmarinePart)
     private readonly partRepo: Repository<SubmarinePart>,
+    @InjectRepository(CharacterInventory)
+    private readonly charInvRepo: Repository<CharacterInventory>,
+    @InjectRepository(RetainerInventory)
+    private readonly retainerInvRepo: Repository<RetainerInventory>,
     @Optional() @Inject(CACHE_MANAGER) private readonly cache?: Cache,
   ) {}
 
+  /**
+   * Recomputes stock levels from the server-side inventory cache.
+   *
+   * The service persists the incoming report into character_inventories /
+   * retainer_inventories before emitting this event, so the message payload
+   * is only used for logging — the stock aggregation always runs over the
+   * whole cache (every character + every retainer), which keeps counts
+   * correct across multiple devices and characters.
+   */
   @EventPattern('inventory_ingest')
   async handleIngest(@Payload() envelope: unknown): Promise<void> {
     const data = readEnvelope<PluginIngestPayload>(envelope);
@@ -54,35 +74,50 @@ export class IngestConsumer {
       return;
     }
 
-    const stockByItemId = new Map<number, { qty: number; name: string }>();
+    const [cachedCharacters, cachedRetainers] = await Promise.all([
+      this.charInvRepo.find(),
+      this.retainerInvRepo.find(),
+    ]);
 
-    const accumulateBags = (bags: PluginBag[] | undefined) => {
-      if (!bags) return;
+    const bagsBySource: Array<[string, StoredBag[]]> = [
+      ...cachedCharacters.map(
+        (c) =>
+          [`character ${c.characterName} (${c.homeWorld ?? 'unknown world'})`, c.bags ?? []] as [
+            string,
+            StoredBag[],
+          ],
+      ),
+      ...cachedRetainers.map((r) => [`retainer ${r.retainerName}`, r.bags ?? []] as [string, StoredBag[]]),
+    ];
+
+    const stockByItemId = new Map<number, { qty: number; name: string }>();
+    let totalItems = 0;
+
+    for (const [source, bags] of bagsBySource) {
+      let sourceItems = 0;
       for (const bag of bags) {
         for (const item of bag.items ?? []) {
           if (item.itemId === GIL_ITEM_ID) continue; // skip Gil
+          sourceItems += item.quantity;
           const existing = stockByItemId.get(item.itemId);
           if (existing) {
             existing.qty += item.quantity;
           } else {
             stockByItemId.set(item.itemId, {
               qty: item.quantity,
-              name: item.itemName,
+              name: item.itemName ?? '',
             });
           }
         }
       }
-    };
-
-    accumulateBags(data.playerInventory);
-
-    for (const retainer of data.retainers ?? []) {
-      accumulateBags(retainer.bags);
+      totalItems += sourceItems;
+      this.logger.debug(`${source}: ${sourceItems} item(s) counted`);
     }
 
     this.logger.log(
-      `Inventory ingest from "${data.characterName ?? 'unknown'}" — ` +
-      `${stockByItemId.size} unique items across player + ${data.retainers?.length ?? 0} retainers`,
+      `Inventory ingest triggered by "${data.characterName ?? 'unknown'}" — recomputing from ` +
+        `${cachedCharacters.length} character(s) and ${cachedRetainers.length} retainer(s) in cache ` +
+        `(${stockByItemId.size} unique items, ${totalItems} total)`,
     );
 
     const [allMaterials, allParts] = await Promise.all([

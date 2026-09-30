@@ -2,13 +2,25 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { BaseMaterial, MaterialClaim, SubmarinePart } from '@ff14/entities';
+import {
+  BaseMaterial,
+  CharacterInventory,
+  MaterialClaim,
+  RetainerInventory,
+  SubmarinePart,
+} from '@ff14/entities';
 import { InventoryController } from './inventory.controller';
 import { InventoryService } from './inventory.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([BaseMaterial, MaterialClaim, SubmarinePart]),
+    TypeOrmModule.forFeature([
+      BaseMaterial,
+      MaterialClaim,
+      SubmarinePart,
+      CharacterInventory,
+      RetainerInventory,
+    ]),
     ClientsModule.registerAsync([
       {
         name: 'INVENTORY_RMQ_CLIENT',
