@@ -45,6 +45,7 @@ describe('OrdersService — computeMissingMaterials', () => {
     o: Order,
     allParts: SubmarinePart[],
     availableStock: Map<string, number> = new Map(),
+    effStock?: Map<string, number>,
   ) => {
     const partsById = new Map(allParts.map((p) => [p.id, p]));
     const partsByName = new Map(allParts.map((p) => [p.name.toLowerCase(), p]));
@@ -63,6 +64,7 @@ describe('OrdersService — computeMissingMaterials', () => {
       matById,
       expanded,
       availableStock,
+      effStock,
     );
   };
 
@@ -141,6 +143,26 @@ describe('OrdersService — computeMissingMaterials', () => {
       missing: 5,
     });
   });
+
+  it('ignores stock reserved by finished (undelivered) orders via effStock', () => {
+    const iron = mat('iron', 'Iron Ore', 10);
+    const hull = part('shark_hull', 'Shark Hull', 3, [
+      { material: iron, quantity: 5 },
+    ]);
+
+    // 3 hulls sit in retainers but all belong to finished orders awaiting pickup
+    const effStock = new Map([['shark_hull', 0]]);
+
+    const missing = compute(order([{ part: hull, quantity: 3 }]), [hull], new Map(), effStock);
+
+    expect(missing).toHaveLength(1);
+    expect(missing[0]).toMatchObject({
+      materialId: 'iron',
+      needed: 15,
+      available: 10,
+      missing: 5,
+    });
+  });
 });
 
 describe('OrdersService — computeAggregate', () => {
@@ -172,7 +194,11 @@ describe('OrdersService — computeAggregate', () => {
   const order = (items: Array<{ part: SubmarinePart; quantity: number }>): Order =>
     ({ items: items.map(({ part, quantity }) => ({ part, quantity }) as OrderItem) }) as Order;
 
-  const aggregate = (orders: Order[], allParts: SubmarinePart[]) => {
+  const aggregate = (
+    orders: Order[],
+    allParts: SubmarinePart[],
+    effStock?: Map<string, number>,
+  ) => {
     const partsById = new Map(allParts.map((p) => [p.id, p]));
     const partsByName = new Map(allParts.map((p) => [p.name.toLowerCase(), p]));
     const matById = new Map<string, BaseMaterial>();
@@ -189,6 +215,7 @@ describe('OrdersService — computeAggregate', () => {
       partsByName,
       matById,
       expanded,
+      effStock,
     );
   };
 
@@ -247,6 +274,54 @@ describe('OrdersService — computeAggregate', () => {
     const agg = aggregate([order([{ part: hull, quantity: 3 }])], [hull]);
 
     expect(agg.materials).toEqual([]);
+  });
+
+  it('counts stock reserved by finished (undelivered) orders as unavailable', () => {
+    const iron = mat('iron', 'Iron Ore', 10);
+    const hull = part('shark_hull', 'Shark Hull', 3, [
+      { material: iron, quantity: 5 },
+    ]);
+
+    // Without reservations the order needs nothing (3 hulls "in stock");
+    // with the 3 hulls reserved for finished orders it needs 15 iron again.
+    expect(aggregate([order([{ part: hull, quantity: 3 }])], [hull]).materials).toEqual([]);
+
+    const effStock = new Map([['shark_hull', 0]]);
+    const agg = aggregate([order([{ part: hull, quantity: 3 }])], [hull], effStock);
+
+    expect(agg.materials).toHaveLength(1);
+    expect(agg.materials[0]).toMatchObject({
+      materialId: 'iron',
+      needed: 15,
+      available: 10,
+      missing: 5,
+    });
+  });
+
+  it('applies reservations to nested part stock as well', () => {
+    const iron = mat('iron', 'Iron Ore', 3);
+    const cobalt = mat('cobalt', 'Cobalt Ore', 100);
+    const baseHull = part('shark_hull', 'Shark Hull', 1, [
+      { material: iron, quantity: 5 },
+    ]);
+    const modHull = part('shark_hull_mod', 'Shark Modified Hull', 0, [
+      { material: baseHull as any, quantity: 1 },
+      { material: cobalt, quantity: 3 },
+    ]);
+
+    // Without the reservation the single base hull covers the build (no iron needed)
+    expect(
+      aggregate([order([{ part: modHull, quantity: 1 }])], [baseHull, modHull]).materials.find(
+        (m: any) => m.materialId === 'iron',
+      ),
+    ).toBeUndefined();
+
+    // The single base hull in stock belongs to a finished order
+    const effStock = new Map([['shark_hull', 0]]);
+    const agg = aggregate([order([{ part: modHull, quantity: 1 }])], [baseHull, modHull], effStock);
+
+    const ironEntry = agg.materials.find((m: any) => m.materialId === 'iron');
+    expect(ironEntry).toMatchObject({ needed: 5, available: 3, missing: 2 });
   });
 });
 

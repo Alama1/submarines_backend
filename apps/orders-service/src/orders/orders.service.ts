@@ -114,7 +114,7 @@ export class OrdersService {
         partType: string | null;
         buildName: string | null;
         quantity: number;   // ordered
-        stock: number;      // currently ready in retainers
+        stock: number;      // ready in retainers minus parts reserved by finished (undelivered) orders
         unitPrice: number;
         lineTotal: number;
       }>;
@@ -168,6 +168,35 @@ export class OrdersService {
     const craftCosts = computeCraftCosts(matById);
     const expanded = expandAllPartMaterials(allParts);
 
+    // Parts still sitting in retainers but already earmarked for finished
+    // orders (built, not yet handed over) must not count towards what the
+    // in-progress builds still need, otherwise the finished sets' parts
+    // show up as available stock for the next orders.
+    const finishedOrders = await this.orderRepo
+      .createQueryBuilder('o')
+      .leftJoinAndSelect('o.items', 'items')
+      .leftJoinAndSelect('items.part', 'part')
+      .where('o.status = :status', { status: 'finished' })
+      .getMany();
+
+    const reservedByPart = new Map<string, number>();
+    for (const o of finishedOrders) {
+      for (const item of o.items ?? []) {
+        if (!item.part?.id) continue;
+        reservedByPart.set(
+          item.part.id,
+          (reservedByPart.get(item.part.id) ?? 0) + item.quantity,
+        );
+      }
+    }
+
+    const effStock = new Map<string, number>(
+      allParts.map((p) => [
+        p.id,
+        Math.max(0, p.stock - (reservedByPart.get(p.id) ?? 0)),
+      ]),
+    );
+
     const costPerPart = new Map<string, number>();
     for (const p of allParts) {
       let cost = 0;
@@ -205,7 +234,7 @@ export class OrdersService {
           partType: item.partType,
           buildName: item.buildName,
           quantity: item.quantity,
-          stock: item.part?.stock ?? 0,
+          stock: part ? (effStock.get(part.id) ?? part.stock) : 0,
           unitPrice: item.unitPrice,
           lineTotal: item.lineTotal,
         };
@@ -230,6 +259,7 @@ export class OrdersService {
           matById,
           expanded,
           availableStock,
+          effStock,
         ),
         financials: {
           revenue,
@@ -245,6 +275,7 @@ export class OrdersService {
       partsByName,
       matById,
       expanded,
+      effStock,
     );
 
     const revenue = mapped.reduce((sum, o) => sum + o.financials.revenue, 0);
@@ -270,6 +301,7 @@ export class OrdersService {
     partsByName: Map<string, SubmarinePart>,
     matById: Map<string, BaseMaterial>,
     expanded: Map<string, ExpandedMaterialRequirement[]>,
+    effStock?: Map<string, number>,
   ): {
     materials: Array<{
       materialId: string;
@@ -285,7 +317,8 @@ export class OrdersService {
       for (const item of o.items ?? []) {
         const part = partsById.get(item.part?.id ?? '') ?? item.part;
         if (!part) continue;
-        const toCraft = Math.max(0, item.quantity - part.stock);
+        const stock = effStock?.get(part.id) ?? part.stock;
+        const toCraft = Math.max(0, item.quantity - stock); // only craft what stock doesn't cover
         if (toCraft <= 0) continue;
         demandByPart.set(part.id, (demandByPart.get(part.id) ?? 0) + toCraft);
       }
@@ -311,7 +344,7 @@ export class OrdersService {
     for (const [nestedId, needed] of partNeeds) {
       const nested = partsById.get(nestedId);
       if (!nested) continue;
-      const covered = Math.min(needed, nested.stock);
+      const covered = Math.min(needed, effStock?.get(nested.id) ?? nested.stock);
       coveredByPart.set(nestedId, covered);
       if (covered > 0) {
         for (const req of expanded.get(nested.id) ?? []) {
@@ -357,6 +390,7 @@ export class OrdersService {
     matById: Map<string, BaseMaterial>,
     expanded: Map<string, ExpandedMaterialRequirement[]>,
     availableStock: Map<string, number>,
+    effStock?: Map<string, number>,
   ): Array<{
     materialId: string;
     name: string;
@@ -380,7 +414,8 @@ export class OrdersService {
     for (const item of order.items ?? []) {
       const part = partsById.get(item.part?.id ?? '') ?? item.part;
       if (!part) continue;
-      const toCraft = Math.max(0, item.quantity - part.stock);
+      const stock = effStock?.get(part.id) ?? part.stock;
+      const toCraft = Math.max(0, item.quantity - stock);
       if (toCraft <= 0) continue;
 
       for (const req of expanded.get(part.id) ?? []) {
@@ -411,7 +446,7 @@ export class OrdersService {
     }> = [];
 
     for (const { part: nested, needed } of partNeeds.values()) {
-      const covered = Math.min(needed, nested.stock);
+      const covered = Math.min(needed, effStock?.get(nested.id) ?? nested.stock);
       if (covered > 0) {
         for (const req of expanded.get(nested.id) ?? []) {
           const rawMat = matById.get(req.materialId);
