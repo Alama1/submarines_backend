@@ -12,6 +12,7 @@ import {
   computeCraftCosts,
   expandAllPartMaterials,
   ExpandedMaterialRequirement,
+  MaterialSource,
   Order,
   OrderItem,
   OrderStatus,
@@ -366,13 +367,18 @@ export class OrdersService {
       if (needed <= 0) continue;
       const mat = matById.get(materialId);
       if (!mat) continue;
+      // NPC-sourced materials are buyable in unlimited quantities — never missing.
+      const missing =
+        mat.whereToBuy === MaterialSource.NPC
+          ? 0
+          : Math.max(0, needed - mat.currentStock);
       materials.push({
         materialId,
         name: mat.name,
         itemId: mat.itemId,
         needed,
         available: mat.currentStock,
-        missing: Math.max(0, needed - mat.currentStock),
+        missing,
       });
     }
 
@@ -456,6 +462,8 @@ export class OrdersService {
     }
 
     for (const { mat, needed } of rawNeeds.values()) {
+      // NPC-sourced materials are buyable in unlimited quantities — never missing.
+      if (mat.whereToBuy === MaterialSource.NPC) continue;
       const available = availableStock.get(mat.id) ?? mat.currentStock;
       const used = Math.min(needed, available);
       availableStock.set(mat.id, available - used);

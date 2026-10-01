@@ -6,6 +6,7 @@ import {
   BaseMaterial,
   expandAllPartMaterials,
   ExpandedMaterialRequirement,
+  MaterialSource,
   Order,
   OrderItem,
   PartMaterial,
@@ -162,6 +163,20 @@ describe('OrdersService — computeMissingMaterials', () => {
       available: 10,
       missing: 5,
     });
+  });
+
+  it('never reports NPC-sourced materials as missing', () => {
+    const vendor = {
+      ...mat('vendor_mat', 'Vendor Goods', 99),
+      whereToBuy: MaterialSource.NPC,
+    } as BaseMaterial;
+    const hull = part('shark_hull', 'Shark Hull', 0, [
+      { material: vendor, quantity: 500 },
+    ]);
+
+    // Requirement (500) exceeds the maxed-out NPC stock (99), but the
+    // material can be bought in unlimited quantities — nothing is missing.
+    expect(compute(order([{ part: hull, quantity: 1 }]), [hull])).toEqual([]);
   });
 });
 
@@ -322,6 +337,28 @@ describe('OrdersService — computeAggregate', () => {
 
     const ironEntry = agg.materials.find((m: any) => m.materialId === 'iron');
     expect(ironEntry).toMatchObject({ needed: 5, available: 3, missing: 2 });
+  });
+
+  it('never reports NPC-sourced materials as missing', () => {
+    const vendor = {
+      ...mat('vendor_mat', 'Vendor Goods', 99),
+      whereToBuy: MaterialSource.NPC,
+    } as BaseMaterial;
+    const hull = part('shark_hull', 'Shark Hull', 0, [
+      { material: vendor, quantity: 500 },
+    ]);
+
+    const agg = aggregate([order([{ part: hull, quantity: 1 }])], [hull]);
+
+    // Requirement (500) exceeds the maxed-out NPC stock (99), but the
+    // material can be bought in unlimited quantities — missing stays 0.
+    expect(agg.materials).toHaveLength(1);
+    expect(agg.materials[0]).toMatchObject({
+      materialId: 'vendor_mat',
+      needed: 500,
+      available: 99,
+      missing: 0,
+    });
   });
 });
 
