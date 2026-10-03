@@ -1,4 +1,5 @@
 import { SubmarinePart } from './submarine.types';
+import { MaterialSource } from './material.types';
 
 export type OrderStatus = 'pending' | 'confirmed' | 'in_progress' | 'finished' | 'fulfilled' | 'cancelled';
 
@@ -108,6 +109,7 @@ export interface InProgressMaterialRequirement {
   needed: number;
   available: number;
   missing: number;
+  whereToBuy: MaterialSource;
 }
 
 export interface MissingMaterial {

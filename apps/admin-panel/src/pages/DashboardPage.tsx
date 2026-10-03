@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   PackageX,
   TrendingUp,
+  Store,
 } from 'lucide-react';
 import { StatusBadge } from '../components/StatusBadge';
 import { formatGil, formatNumber } from '../lib/utils';
@@ -490,10 +491,23 @@ export const DashboardPage: React.FC = () => {
                 }`}
               >
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400 flex-shrink-0" />
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                      mat.whereToBuy === 'NPC' ? 'bg-amber-400' : 'bg-slate-400'
+                    }`}
+                  />
                   <span className="font-medium text-slate-800 truncate">
                     {mat.name}
                   </span>
+                  {mat.whereToBuy === 'NPC' && (
+                    <span
+                      title="Buy from NPC vendor — always available, never runs out"
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-gradient-to-r from-amber-100 via-yellow-100 to-amber-100 border border-amber-300 text-amber-700 text-[9px] font-bold uppercase tracking-wider flex-shrink-0 shadow-sm"
+                    >
+                      <Store className="w-2.5 h-2.5" />
+                      NPC Trade
+                    </span>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 justify-end sm:justify-start">
                   <span className="text-slate-500 font-mono whitespace-nowrap">

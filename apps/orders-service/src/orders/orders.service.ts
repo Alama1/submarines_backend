@@ -361,6 +361,7 @@ export class OrdersService {
       needed: number;
       available: number;
       missing: number;
+      whereToBuy: MaterialSource;
     }> = [];
 
     for (const [materialId, needed] of rawNeeds) {
@@ -379,6 +380,7 @@ export class OrdersService {
         needed,
         available: mat.currentStock,
         missing,
+        whereToBuy: mat.whereToBuy,
       });
     }
 
