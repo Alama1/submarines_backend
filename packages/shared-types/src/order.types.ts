@@ -42,6 +42,14 @@ export interface BulkDiscount {
   updatedAt?: string;
 }
 
+export interface CrafterBulkDiscount {
+  id: string;
+  threshold: number;
+  discountPercent: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface CreateOrderDto {
   clientName: string;
   isAnonymous?: boolean;

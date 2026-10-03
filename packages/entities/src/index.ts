@@ -11,6 +11,7 @@ export { SubmarinePart } from './submarine-part.entity';
 export { Order, OrderStatus } from './order.entity';
 export { OrderItem } from './order-item.entity';
 export { BulkDiscount } from './bulk-discount.entity';
+export { CrafterBulkDiscount } from './crafter-bulk-discount.entity';
 export { PartSet } from './part-set.entity';
 export { PartSetItem } from './part-set-item.entity';
 export { ApiKey } from './api-key.entity';

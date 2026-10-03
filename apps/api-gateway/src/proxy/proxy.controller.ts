@@ -150,4 +150,14 @@ export class ProxyController {
   proxyDiscountsWildcard(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
     return this.forward(this.ordersUrl, req, reply);
   }
+
+  @All('crafter-discounts')
+  proxyCrafterDiscountsRoot(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    return this.forward(this.ordersUrl, req, reply);
+  }
+
+  @All('crafter-discounts/*')
+  proxyCrafterDiscountsWildcard(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    return this.forward(this.ordersUrl, req, reply);
+  }
 }

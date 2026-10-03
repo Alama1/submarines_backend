@@ -128,7 +128,9 @@ export class AuthGuard implements CanActivate {
           rawUrl.startsWith('/api/prices') ||
           rawUrl.startsWith('/prices') ||
           rawUrl.startsWith('/api/discounts') ||
-          rawUrl.startsWith('/discounts')));
+          rawUrl.startsWith('/discounts') ||
+          rawUrl.startsWith('/api/crafter-discounts') ||
+          rawUrl.startsWith('/crafter-discounts')));
 
     if (isPublicClientRoute) {
       return true;
