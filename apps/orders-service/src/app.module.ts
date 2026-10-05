@@ -20,6 +20,7 @@ import { HealthController } from './health/health.controller';
 import { DiscountsModule } from './discounts/discounts.module';
 import { CrafterDiscountsModule } from './crafter-discounts/crafter-discounts.module';
 import { OrdersModule } from './orders/orders.module';
+import { AboutModule } from './about/about.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { OrdersModule } from './orders/orders.module';
     DiscountsModule,
     CrafterDiscountsModule,
     OrdersModule,
+    AboutModule,
   ],
   controllers: [HealthController],
   providers: [
