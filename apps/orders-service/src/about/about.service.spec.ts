@@ -165,6 +165,36 @@ describe('AboutService — getStats', () => {
     expect(stats.precrafts.worth).toBe(1100);
   });
 
+  it('computes fulfillment time percentiles from creation to handover', async () => {
+    const base = Date.parse('2025-01-01T00:00:00Z');
+    const mk = (durationMs: number, status = 'fulfilled'): Order =>
+      order({
+        status: status as Order['status'],
+        createdAt: new Date(base),
+        updatedAt: new Date(base + durationMs),
+      });
+
+    const svc = buildSvc([
+      mk(100),
+      mk(400),
+      mk(200),
+      mk(300),
+      mk(9999, 'in_progress'),
+      mk(8888, 'cancelled'),
+    ]);
+
+    const stats = await svc.getStats();
+
+    expect(stats.fulfillmentTime).toEqual({
+      orderCount: 4,
+      p25Ms: 175,
+      medianMs: 250,
+      p75Ms: 325,
+      p90Ms: 370,
+      avgMs: 250,
+    });
+  });
+
   it('handles an empty database without errors', async () => {
     const svc = buildSvc([]);
 
@@ -174,6 +204,7 @@ describe('AboutService — getStats', () => {
     expect(stats.orders.fulfilled).toBe(0);
     expect(stats.crafting.fulfilledParts).toBe(0);
     expect(stats.precrafts.worth).toBe(0);
+    expect(stats.fulfillmentTime).toBeNull();
     expect(stats.topParts).toEqual([]);
   });
 });

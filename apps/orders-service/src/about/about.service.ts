@@ -29,6 +29,14 @@ export interface AboutStats {
     myWorth: number;
     worth: number;
   };
+  fulfillmentTime: {
+    orderCount: number;
+    p25Ms: number;
+    medianMs: number;
+    p75Ms: number;
+    p90Ms: number;
+    avgMs: number;
+  } | null;
   topParts: Array<{ name: string; quantity: number }>;
 }
 
@@ -56,6 +64,15 @@ export class AboutService {
     return mat.myPrice ?? mat.marketPrice ?? mat.npcPrice ?? 0;
   }
 
+  /** Continuous percentile (same interpolation as Postgres percentile_cont). */
+  private percentile(sorted: number[], p: number): number {
+    if (sorted.length === 0) return 0;
+    const idx = (sorted.length - 1) * p;
+    const lo = Math.floor(idx);
+    const hi = Math.ceil(idx);
+    return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+  }
+
   async getStats(): Promise<AboutStats> {
     const [orders, materials] = await Promise.all([
       this.orderRepo.find(),
@@ -81,6 +98,7 @@ export class AboutService {
 
     const clients = new Set<string>();
     const partQuantity = new Map<string, number>();
+    const fulfillmentDurations: number[] = [];
 
     const isCraftable = (partType: string | null | undefined): boolean =>
       AboutService.CRAFTABLE_PART_TYPES.has((partType ?? '').toLowerCase());
@@ -109,6 +127,7 @@ export class AboutService {
         fulfilledOrders++;
         revenue += order.total;
         discountsGiven += order.discountAmt;
+        fulfillmentDurations.push(order.updatedAt.getTime() - order.createdAt.getTime());
         if (!lastFulfilledAt || order.updatedAt > lastFulfilledAt) {
           lastFulfilledAt = order.updatedAt;
         }
@@ -146,6 +165,22 @@ export class AboutService {
       .sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name))
       .slice(0, 5);
 
+    // How long past orders took from creation to handover
+    let fulfillmentTime: AboutStats['fulfillmentTime'] = null;
+    if (fulfillmentDurations.length > 0) {
+      const sorted = [...fulfillmentDurations].sort((a, b) => a - b);
+      fulfillmentTime = {
+        orderCount: sorted.length,
+        p25Ms: Math.round(this.percentile(sorted, 0.25)),
+        medianMs: Math.round(this.percentile(sorted, 0.5)),
+        p75Ms: Math.round(this.percentile(sorted, 0.75)),
+        p90Ms: Math.round(this.percentile(sorted, 0.9)),
+        avgMs: Math.round(
+          sorted.reduce((sum, d) => sum + d, 0) / sorted.length,
+        ),
+      };
+    }
+
     return {
       generatedAt: new Date().toISOString(),
       tracking: {
@@ -172,6 +207,7 @@ export class AboutService {
         myWorth,
         worth: Math.round((marketWorth + myWorth) / 2),
       },
+      fulfillmentTime,
       topParts,
     };
   }
