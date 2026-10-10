@@ -49,6 +49,9 @@ interface PricingPlan {
 export class OrdersService {
   private static readonly CRAFTABLE_PART_TYPES = new Set(['bow', 'bridge', 'hull', 'stern']);
 
+  /** Part types never discounted by promo codes (repair kits). */
+  private static readonly PROMO_EXCLUDED_PART_TYPES = new Set(['materials']);
+
   private static readonly EDITABLE_STATUSES = new Set<OrderStatus>(['confirmed', 'in_progress']);
 
   private static readonly PROMO_EDITABLE_STATUSES = new Set<OrderStatus>([
@@ -592,8 +595,18 @@ export class OrdersService {
     const bulkPct = matchingTier ? Number(matchingTier.discountPercent) : 0;
     const bulkAmt = Math.round(subtotal * (bulkPct / 100));
 
+    // Promo codes only apply to craftable parts — repair kits (materials) are
+    // always charged at full price.
+    const promoBase = preparedItems.reduce(
+      (acc, i) =>
+        acc +
+          (OrdersService.PROMO_EXCLUDED_PART_TYPES.has((i.partType || '').toLowerCase())
+          ? 0
+          : i.unitPrice * i.quantity),
+      0,
+    );
     const promoAmt = promo
-      ? this.promoCodes.computeDiscountAmount(promo, subtotal)
+      ? this.promoCodes.computeDiscountAmount(promo, promoBase)
       : 0;
     const usePromo = !!promo && promoAmt >= bulkAmt && promoAmt > 0;
 

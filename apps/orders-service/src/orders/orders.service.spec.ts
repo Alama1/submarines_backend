@@ -632,4 +632,33 @@ describe('OrdersService — buildPricingPlan (promo vs bulk, no stacking)', () =
       releasePromoId: null,
     });
   });
+
+  it('excludes repair kits (materials) from the promo base', () => {
+    const withKits = [
+      ...items,
+      { part: part('m1', 'Materials'), partType: 'Materials', quantity: 2, unitPrice: 500 },
+    ]; // subtotal 5500, promo base 4500 → 10% promo = 450, not 550
+    const plan = (svc as any).buildPricingPlan(withKits, discounts, promo(), null);
+    expect(plan).toMatchObject({
+      subtotal: 5500,
+      discountAmt: 450,
+      total: 5050,
+      discountSource: 'promo',
+    });
+  });
+
+  it('falls back to bulk when the order contains only repair kits', () => {
+    const plan = (svc as any).buildPricingPlan(
+      [{ part: part('m1', 'Materials'), partType: 'Materials', quantity: 3, unitPrice: 500 }],
+      discounts,
+      promo(),
+      null,
+    );
+    expect(plan).toMatchObject({
+      subtotal: 1500,
+      discountAmt: 0,
+      total: 1500,
+      discountSource: 'bulk',
+    });
+  });
 });
