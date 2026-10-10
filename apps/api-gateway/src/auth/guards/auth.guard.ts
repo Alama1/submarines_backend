@@ -116,6 +116,8 @@ export class AuthGuard implements CanActivate {
       rawUrl === '/api/health' ||
       rawUrl === '/health' ||
       (method === 'POST' && (rawUrl === '/api/orders' || rawUrl === '/orders')) ||
+      (method === 'POST' &&
+        (rawUrl === '/api/promo-codes/validate' || rawUrl === '/promo-codes/validate')) ||
       (method === 'GET' && (rawUrl.startsWith('/api/orders/lookup/') || rawUrl.startsWith('/orders/lookup/'))) ||
       (method === 'GET' && (rawUrl === '/api/orders/in-progress' || rawUrl === '/orders/in-progress')) ||
       (method === 'GET' && (rawUrl === '/api/inventory/missing' || rawUrl === '/inventory/missing')) ||

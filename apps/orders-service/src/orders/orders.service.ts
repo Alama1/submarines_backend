@@ -10,10 +10,12 @@ import {
   BaseMaterial,
   BulkDiscount,
   computeCraftCosts,
+  DiscountCode,
   expandAllPartMaterials,
   ExpandedMaterialRequirement,
   MaterialSource,
   Order,
+  OrderDiscountSource,
   OrderItem,
   OrderStatus,
   SubmarinePart,
@@ -22,12 +24,38 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-status.dto';
 import { UpdateOrderNotesDto } from './dto/update-notes.dto';
+import { PromoCodesService } from '../promo-codes/promo-codes.service';
+
+interface PreparedOrderItem {
+  part: SubmarinePart | null;
+  partType: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+interface PricingPlan {
+  subtotal: number;
+  discountPct: number;
+  discountAmt: number;
+  total: number;
+  discountSource: OrderDiscountSource;
+  promoCodeId: string | null;
+  promoCode: string | null;
+  consumePromoId: string | null;
+  releasePromoId: string | null;
+}
 
 @Injectable()
 export class OrdersService {
   private static readonly CRAFTABLE_PART_TYPES = new Set(['bow', 'bridge', 'hull', 'stern']);
 
   private static readonly EDITABLE_STATUSES = new Set<OrderStatus>(['confirmed', 'in_progress']);
+
+  private static readonly PROMO_EDITABLE_STATUSES = new Set<OrderStatus>([
+    'pending',
+    'confirmed',
+    'in_progress',
+  ]);
 
   constructor(
     @InjectRepository(Order)
@@ -38,6 +66,7 @@ export class OrdersService {
     private readonly discountRepo: Repository<BulkDiscount>,
     @InjectDataSource()
     private readonly ds: DataSource,
+    private readonly promoCodes: PromoCodesService,
   ) {}
 
   private async generateUniqueOrderCode(): Promise<string> {
@@ -520,6 +549,33 @@ export class OrdersService {
     preparedItems: Array<{ part: SubmarinePart; quantity: number; unitPrice: number }>,
     discounts: BulkDiscount[],
   ): { subtotal: number; discountPct: number; discountAmt: number; total: number } {
+    const { subtotal, discountPct, discountAmt, total } = this.buildPricingPlan(
+      preparedItems.map((i) => ({
+        part: i.part,
+        partType: i.part.partType,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+      })),
+      discounts,
+      null,
+      null,
+    );
+    return { subtotal, discountPct, discountAmt, total };
+  }
+
+  /**
+   * Computes the order pricing applying AT MOST one discount: the promo code
+   * when its amount is greater than or equal to the bulk tier amount, the bulk
+   * tier otherwise. Discounts never stack. `prevAppliedPromoId` is the promo
+   * currently consumed by the order (null for new orders) and is used to figure
+   * out which uses must be consumed / released.
+   */
+  private buildPricingPlan(
+    preparedItems: PreparedOrderItem[],
+    discounts: BulkDiscount[],
+    promo: DiscountCode | null,
+    prevAppliedPromoId: string | null,
+  ): PricingPlan {
     const subtotal = preparedItems.reduce(
       (acc, i) => acc + i.unitPrice * i.quantity,
       0,
@@ -527,15 +583,59 @@ export class OrdersService {
     const totalPartsCount = preparedItems.reduce(
       (acc, i) =>
         acc +
-          (OrdersService.CRAFTABLE_PART_TYPES.has(i.part.partType.toLowerCase())
+          (OrdersService.CRAFTABLE_PART_TYPES.has((i.partType || '').toLowerCase())
           ? i.quantity
           : 0),
       0,
     );
     const matchingTier = discounts.find((d) => totalPartsCount >= d.threshold);
-    const discountPct = matchingTier ? Number(matchingTier.discountPercent) : 0;
-    const discountAmt = Math.round(subtotal * (discountPct / 100));
-    return { subtotal, discountPct, discountAmt, total: subtotal - discountAmt };
+    const bulkPct = matchingTier ? Number(matchingTier.discountPercent) : 0;
+    const bulkAmt = Math.round(subtotal * (bulkPct / 100));
+
+    const promoAmt = promo
+      ? this.promoCodes.computeDiscountAmount(promo, subtotal)
+      : 0;
+    const usePromo = !!promo && promoAmt >= bulkAmt && promoAmt > 0;
+
+    const discountSource: OrderDiscountSource = usePromo ? 'promo' : 'bulk';
+    const discountPct = usePromo
+      ? promo!.discountType === 'percent'
+        ? Number(promo!.discountValue)
+        : 0
+      : bulkPct;
+    const discountAmt = usePromo ? promoAmt : bulkAmt;
+
+    const consumePromoId =
+      usePromo && prevAppliedPromoId !== promo!.id ? promo!.id : null;
+    const releasePromoId =
+      prevAppliedPromoId && (!usePromo || prevAppliedPromoId !== promo!.id)
+        ? prevAppliedPromoId
+        : null;
+
+    return {
+      subtotal,
+      discountPct,
+      discountAmt,
+      total: subtotal - discountAmt,
+      discountSource,
+      promoCodeId: promo ? promo.id : null,
+      promoCode: promo ? promo.code : null,
+      consumePromoId,
+      releasePromoId,
+    };
+  }
+
+  private preparedItemsFromOrder(order: Order): PreparedOrderItem[] {
+    return (order.items ?? []).map((i) => ({
+      part: i.part,
+      partType: i.part?.partType ?? i.partType ?? '',
+      quantity: i.quantity,
+      unitPrice: i.unitPrice,
+    }));
+  }
+
+  private async findBulkDiscounts(): Promise<BulkDiscount[]> {
+    return this.discountRepo.find({ order: { threshold: 'DESC' } });
   }
 
   async create(dto: CreateOrderDto): Promise<Order> {
@@ -555,6 +655,7 @@ export class OrdersService {
 
     const preparedItems: Array<{
       part: SubmarinePart;
+      partType: string;
       quantity: number;
       buildName: string | null;
       unitPrice: number;
@@ -564,19 +665,18 @@ export class OrdersService {
       const part = partMap.get(itemDto.partId)!;
       preparedItems.push({
         part,
+        partType: part.partType,
         quantity: itemDto.quantity,
         buildName: itemDto.buildName ?? null,
         unitPrice: part.price,
       });
     }
 
-    const discounts = await this.discountRepo.find({
-      order: { threshold: 'DESC' },
-    });
-    const { subtotal, discountPct, discountAmt, total } = this.computePricing(
-      preparedItems,
-      discounts,
-    );
+    const discounts = await this.findBulkDiscounts();
+    const promo = dto.promoCode
+      ? await this.promoCodes.assertUsable(dto.promoCode)
+      : null;
+    const plan = this.buildPricingPlan(preparedItems, discounts, promo, null);
     const orderCode = await this.generateUniqueOrderCode();
 
     const savedOrder = await this.ds.transaction(async (em) => {
@@ -588,13 +688,20 @@ export class OrdersService {
         rawText: dto.rawText ?? null,
         notes: dto.notes ?? null,
         fulfillmentDt: dto.fulfillmentDt ?? null,
-        subtotal,
-        discountPct,
-        discountAmt,
-        total,
+        subtotal: plan.subtotal,
+        discountPct: plan.discountPct,
+        discountAmt: plan.discountAmt,
+        discountSource: plan.discountSource,
+        promoCodeId: plan.promoCodeId,
+        promoCode: plan.promoCode,
+        total: plan.total,
         status: 'pending',
       });
       await em.save(order);
+
+      if (plan.consumePromoId) {
+        await this.promoCodes.consumeTx(em, plan.consumePromoId);
+      }
 
       for (const pi of preparedItems) {
         const orderItem = em.create(OrderItem, {
@@ -684,19 +791,34 @@ export class OrdersService {
         }
       }
 
-      const preparedItems = dto.items.map((itemDto) => {
+      const preparedItems: Array<{
+        part: SubmarinePart;
+        partType: string;
+        quantity: number;
+        buildName: string | null;
+        unitPrice: number;
+      }> = dto.items.map((itemDto) => {
         const part = partMap.get(itemDto.partId)!;
         return {
           part,
+          partType: part.partType,
           quantity: itemDto.quantity,
           buildName: itemDto.buildName ?? null,
           unitPrice: part.price,
         };
       });
-      const discounts = await this.discountRepo.find({
-        order: { threshold: 'DESC' },
-      });
-      const pricing = this.computePricing(preparedItems, discounts);
+      const discounts = await this.findBulkDiscounts();
+      // Order edits keep the promo code attached to the order — the best-of
+      // discount (promo vs bulk) is simply recalculated for the new totals.
+      const promo = order.promoCodeId
+        ? await this.promoCodes.findByIdOrNull(order.promoCodeId)
+        : null;
+      const plan = this.buildPricingPlan(
+        preparedItems,
+        discounts,
+        promo,
+        order.discountSource === 'promo' ? order.promoCodeId : null,
+      );
 
       await this.ds.transaction(async (em) => {
         if (order.items?.length) {
@@ -717,11 +839,21 @@ export class OrdersService {
             buildName: pi.buildName,
           }),
         );
-        order.subtotal = pricing.subtotal;
-        order.discountPct = pricing.discountPct;
-        order.discountAmt = pricing.discountAmt;
-        order.total = pricing.total;
+        order.subtotal = plan.subtotal;
+        order.discountPct = plan.discountPct;
+        order.discountAmt = plan.discountAmt;
+        order.discountSource = plan.discountSource;
+        order.promoCodeId = plan.promoCodeId;
+        order.promoCode = plan.promoCode;
+        order.total = plan.total;
         await em.save(order);
+
+        if (plan.consumePromoId) {
+          await this.promoCodes.consumeTx(em, plan.consumePromoId);
+        }
+        if (plan.releasePromoId) {
+          await this.promoCodes.releaseTx(em, plan.releasePromoId);
+        }
       });
     } else {
       await this.orderRepo.save(order);
@@ -735,8 +867,71 @@ export class OrdersService {
     if (order.status !== 'pending' && order.status !== 'confirmed') {
       throw new BadRequestException(`Cannot cancel order in "${order.status}" status (only pending or confirmed orders can be cancelled)`);
     }
-    order.status = 'cancelled';
-    await this.orderRepo.save(order);
+    // A consumed promo use is returned to the code when the order is cancelled.
+    const appliedPromoId =
+      order.discountSource === 'promo' ? order.promoCodeId : null;
+    await this.ds.transaction(async (em) => {
+      order.status = 'cancelled';
+      await em.save(order);
+      if (appliedPromoId) {
+        await this.promoCodes.releaseTx(em, appliedPromoId);
+      }
+    });
+    return this.findOne(id);
+  }
+
+  /**
+   * Applies, replaces or removes the promo code of an order (admin action).
+   * Pass null / empty string to remove the promo. The best-of rule (promo vs
+   * bulk, never stacking) is recalculated against the order's current items.
+   */
+  async applyPromo(id: string, rawPromoCode: string | null): Promise<Order> {
+    const order = await this.findOne(id);
+    if (!OrdersService.PROMO_EDITABLE_STATUSES.has(order.status)) {
+      throw new BadRequestException(
+        `Order "${order.orderCode}" is "${order.status}" — promo codes can only be applied to pending or active orders`,
+      );
+    }
+
+    const requested = rawPromoCode ? rawPromoCode.trim().toUpperCase() || null : null;
+    if (requested) {
+      this.promoCodes.normalizeCode(requested);
+    }
+
+    // Re-applying the code already attached to the order is a no-op.
+    if ((requested ?? null) === (order.promoCode ?? null)) {
+      return order;
+    }
+
+    const promo = requested
+      ? await this.promoCodes.assertUsable(requested)
+      : null;
+    const discounts = await this.findBulkDiscounts();
+    const plan = this.buildPricingPlan(
+      this.preparedItemsFromOrder(order),
+      discounts,
+      promo,
+      order.discountSource === 'promo' ? order.promoCodeId : null,
+    );
+
+    await this.ds.transaction(async (em) => {
+      order.subtotal = plan.subtotal;
+      order.discountPct = plan.discountPct;
+      order.discountAmt = plan.discountAmt;
+      order.discountSource = plan.discountSource;
+      order.promoCodeId = plan.promoCodeId;
+      order.promoCode = plan.promoCode;
+      order.total = plan.total;
+      await em.save(order);
+
+      if (plan.consumePromoId) {
+        await this.promoCodes.consumeTx(em, plan.consumePromoId);
+      }
+      if (plan.releasePromoId) {
+        await this.promoCodes.releaseTx(em, plan.releasePromoId);
+      }
+    });
+
     return this.findOne(id);
   }
 }

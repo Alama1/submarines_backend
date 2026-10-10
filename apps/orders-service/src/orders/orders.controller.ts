@@ -16,6 +16,7 @@ import { ConfirmOrderDto } from './dto/confirm-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-status.dto';
 import { UpdateOrderNotesDto } from './dto/update-notes.dto';
+import { ApplyPromoCodeDto } from './dto/apply-promo.dto';
 
 @Controller('orders')
 export class OrdersController {
@@ -94,6 +95,11 @@ export class OrdersController {
     @Body() dto: UpdateOrderNotesDto,
   ) {
     return this.svc.updateNotes(id, dto);
+  }
+
+  @Patch(':id/promo')
+  applyPromo(@Param('id') id: string, @Body() dto: ApplyPromoCodeDto) {
+    return this.svc.applyPromo(id, dto.promoCode ?? null);
   }
 
   @Delete(':id')

@@ -3,6 +3,12 @@ import { MaterialSource } from './material.types';
 
 export type OrderStatus = 'pending' | 'confirmed' | 'in_progress' | 'finished' | 'fulfilled' | 'cancelled';
 
+export type OrderDiscountSource = 'bulk' | 'promo';
+
+export type DiscountCodeType = 'flat' | 'percent';
+
+export type DiscountCodeStatus = 'active' | 'scheduled' | 'expired' | 'exhausted';
+
 export interface OrderItem {
   id?: number;
   orderId?: string;
@@ -25,6 +31,9 @@ export interface Order {
   subtotal: number;
   discountPct: number;
   discountAmt: number;
+  discountSource?: OrderDiscountSource;
+  promoCodeId?: string | null;
+  promoCode?: string | null;
   total: number;
   status: OrderStatus;
   notes?: string | null;
@@ -51,11 +60,46 @@ export interface CrafterBulkDiscount {
   updatedAt?: string;
 }
 
+export interface DiscountCode {
+  id: string;
+  code: string;
+  discountType: DiscountCodeType;
+  discountValue: number;
+  maxUses: number;
+  usedCount: number;
+  activeFrom: string | null;
+  activeUntil: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateDiscountCodeDto {
+  code?: string;
+  discountType: DiscountCodeType;
+  discountValue: number;
+  maxUses: number;
+  activeFrom?: string | null;
+  activeUntil?: string | null;
+}
+
+export interface UpdateDiscountCodeDto extends Partial<CreateDiscountCodeDto> {}
+
+export type PromoCodeRejectionReason = 'not_found' | 'not_started' | 'expired' | 'exhausted';
+
+export interface PromoCodeValidationResponse {
+  valid: boolean;
+  reason?: PromoCodeRejectionReason;
+  message?: string;
+  code?: Omit<DiscountCode, 'id' | 'createdAt' | 'updatedAt'> & { remainingUses: number };
+  discountAmt?: number;
+}
+
 export interface CreateOrderDto {
   clientName: string;
   isAnonymous?: boolean;
   contactInfo?: string;
   rawText?: string;
+  promoCode?: string;
   items: Array<{
     partId: string;
     quantity: number;

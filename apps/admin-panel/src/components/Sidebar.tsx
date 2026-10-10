@@ -7,6 +7,7 @@ import {
   Hammer,
   Coins,
   Percent,
+  Ticket,
   KeyRound,
   Anchor,
   X,
@@ -20,6 +21,7 @@ const navItems = [
   { to: '/recipes', label: 'Parts & Recipes', icon: Hammer },
   { to: '/prices', label: 'Price Management', icon: Coins },
   { to: '/discounts', label: 'Bulk Management', icon: Percent },
+  { to: '/promo', label: 'Promo', icon: Ticket },
   { to: '/settings', label: 'API Keys & Settings', icon: KeyRound },
 ];
 

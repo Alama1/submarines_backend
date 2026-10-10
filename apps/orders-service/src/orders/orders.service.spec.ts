@@ -1,4 +1,5 @@
 import { OrdersService } from './orders.service';
+import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import {
   BadRequestException,
 } from '@nestjs/common';
@@ -15,6 +16,7 @@ import {
 
 describe('OrdersService — computeMissingMaterials', () => {
   const svc = new OrdersService(
+    {} as any,
     {} as any,
     {} as any,
     {} as any,
@@ -182,6 +184,7 @@ describe('OrdersService — computeMissingMaterials', () => {
 
 describe('OrdersService — computeAggregate', () => {
   const svc = new OrdersService(
+    {} as any,
     {} as any,
     {} as any,
     {} as any,
@@ -368,6 +371,7 @@ describe('OrdersService — computePricing', () => {
     {} as any,
     {} as any,
     {} as any,
+    {} as any,
   );
 
   const part = (id: string, partType: string): SubmarinePart =>
@@ -415,7 +419,7 @@ describe('OrdersService — update', () => {
     const orderRepo = {
       findOne: jest.fn().mockResolvedValue({ id: 'o1', orderCode: 'SUB-1', status: 'finished' }),
     };
-    const svc = new OrdersService(orderRepo as any, {} as any, {} as any, {} as any);
+    const svc = new OrdersService(orderRepo as any, {} as any, {} as any, {} as any, {} as any);
 
     await expect(svc.update('o1', { notes: 'x' })).rejects.toThrow(BadRequestException);
     await expect(svc.update('o1', { notes: 'x' })).rejects.toThrow(/only active orders/i);
@@ -434,7 +438,7 @@ describe('OrdersService — update', () => {
       findOne: jest.fn().mockResolvedValue(order),
       save: jest.fn().mockResolvedValue(order),
     };
-    const svc = new OrdersService(orderRepo as any, {} as any, {} as any, {} as any);
+    const svc = new OrdersService(orderRepo as any, {} as any, {} as any, {} as any, {} as any);
 
     const result = await svc.update('o1', { clientName: 'New Name', notes: 'fixed typo' });
 
@@ -467,7 +471,7 @@ describe('OrdersService — update', () => {
       save: jest.fn().mockResolvedValue({}),
     };
     const ds = { transaction: jest.fn().mockImplementation((cb: any) => cb(em)) };
-    const svc = new OrdersService(orderRepo as any, partRepo as any, discountRepo as any, ds as any);
+    const svc = new OrdersService(orderRepo as any, partRepo as any, discountRepo as any, ds as any, {} as any);
 
     const result = await svc.update('o1', {
       items: [{ partId: 'shark_hull', quantity: 2 }],
@@ -490,8 +494,142 @@ describe('OrdersService — update', () => {
     const orderRepo = {
       findOne: jest.fn().mockResolvedValue({ id: 'o1', orderCode: 'SUB-1', status: 'confirmed', items: [] }),
     };
-    const svc = new OrdersService(orderRepo as any, {} as any, {} as any, {} as any);
+    const svc = new OrdersService(orderRepo as any, {} as any, {} as any, {} as any, {} as any);
 
     await expect(svc.update('o1', { items: [] })).rejects.toThrow(BadRequestException);
+  });
+});
+
+describe('OrdersService — buildPricingPlan (promo vs bulk, no stacking)', () => {
+  const svc = new OrdersService(
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    new PromoCodesService({} as any, {} as any),
+  );
+
+  const part = (id: string, partType: string): SubmarinePart =>
+    ({ id, partType }) as SubmarinePart;
+
+  const items = [
+    { part: part('h1', 'hull'), partType: 'hull', quantity: 4, unitPrice: 1000 },
+    { part: part('b1', 'bow'), partType: 'bow', quantity: 1, unitPrice: 500 },
+  ]; // subtotal 4500, bulk tier: >= 4 parts → 5% (225)
+
+  const discounts = [
+    { threshold: 10, discountPercent: 15 },
+    { threshold: 4, discountPercent: 5 },
+  ] as any[];
+
+  const promo = (over: Partial<any> = {}) =>
+    ({
+      id: 'p1',
+      code: 'PROMO-TEST',
+      discountType: 'percent',
+      discountValue: 10,
+      maxUses: 5,
+      usedCount: 0,
+      activeFrom: null,
+      activeUntil: null,
+      ...over,
+    }) as any;
+
+  it('applies the promo when it beats the bulk tier and consumes a use', () => {
+    const plan = (svc as any).buildPricingPlan(items, discounts, promo(), null);
+    expect(plan).toMatchObject({
+      subtotal: 4500,
+      discountAmt: 450,
+      total: 4050,
+      discountSource: 'promo',
+      promoCodeId: 'p1',
+      promoCode: 'PROMO-TEST',
+      consumePromoId: 'p1',
+      releasePromoId: null,
+    });
+  });
+
+  it('applies the bulk tier when it is strictly higher and consumes nothing', () => {
+    const plan = (svc as any).buildPricingPlan(
+      items,
+      discounts,
+      promo({ discountValue: 1 }), // 45 < 225
+      null,
+    );
+    expect(plan).toMatchObject({
+      discountAmt: 225,
+      discountPct: 5,
+      discountSource: 'bulk',
+      consumePromoId: null,
+      releasePromoId: null,
+    });
+  });
+
+  it('prefers the promo on ties', () => {
+    const plan = (svc as any).buildPricingPlan(
+      items,
+      discounts,
+      promo({ discountValue: 5 }), // 225 === 225
+      null,
+    );
+    expect(plan).toMatchObject({ discountAmt: 225, discountSource: 'promo' });
+  });
+
+  it('caps flat promos at the subtotal', () => {
+    const plan = (svc as any).buildPricingPlan(
+      [{ part: part('h1', 'hull'), partType: 'hull', quantity: 1, unitPrice: 1000 }],
+      [],
+      promo({ discountType: 'flat', discountValue: 999_999 }),
+      null,
+    );
+    expect(plan).toMatchObject({
+      subtotal: 1000,
+      discountAmt: 1000,
+      total: 0,
+      discountSource: 'promo',
+    });
+  });
+
+  it('releases the previously applied promo when bulk becomes better', () => {
+    const plan = (svc as any).buildPricingPlan(
+      items,
+      discounts,
+      promo({ discountValue: 1 }),
+      'p1',
+    );
+    expect(plan).toMatchObject({
+      discountSource: 'bulk',
+      consumePromoId: null,
+      releasePromoId: 'p1',
+    });
+  });
+
+  it('switches consumption when a different promo code is applied', () => {
+    const plan = (svc as any).buildPricingPlan(items, discounts, promo({ id: 'p2' }), 'p1');
+    expect(plan).toMatchObject({
+      discountSource: 'promo',
+      promoCodeId: 'p2',
+      consumePromoId: 'p2',
+      releasePromoId: 'p1',
+    });
+  });
+
+  it('does not double-consume the same promo on reprice', () => {
+    const plan = (svc as any).buildPricingPlan(items, discounts, promo(), 'p1');
+    expect(plan).toMatchObject({
+      discountSource: 'promo',
+      consumePromoId: null,
+      releasePromoId: null,
+    });
+  });
+
+  it('ignores zero-amount promos and falls back to bulk (code kept for later repricing)', () => {
+    const plan = (svc as any).buildPricingPlan(items, discounts, promo({ discountValue: 0 }), null);
+    expect(plan).toMatchObject({
+      discountSource: 'bulk',
+      promoCodeId: 'p1',
+      consumePromoId: null,
+      releasePromoId: null,
+    });
   });
 });

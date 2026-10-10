@@ -161,6 +161,16 @@ export class ProxyController {
     return this.forward(this.ordersUrl, req, reply);
   }
 
+  @All('promo-codes')
+  proxyPromoCodesRoot(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    return this.forward(this.ordersUrl, req, reply);
+  }
+
+  @All('promo-codes/*')
+  proxyPromoCodesWildcard(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    return this.forward(this.ordersUrl, req, reply);
+  }
+
   @All('about')
   proxyAboutRoot(@Req() req: ProxyIncomingRequest, @Res({ passthrough: true }) reply: FastifyReply) {
     return this.forward(this.ordersUrl, req, reply);

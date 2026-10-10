@@ -15,10 +15,12 @@ import {
   OrderItem,
   BulkDiscount,
   CrafterBulkDiscount,
+  DiscountCode,
 } from '@ff14/entities';
 import { HealthController } from './health/health.controller';
 import { DiscountsModule } from './discounts/discounts.module';
 import { CrafterDiscountsModule } from './crafter-discounts/crafter-discounts.module';
+import { PromoCodesModule } from './promo-codes/promo-codes.module';
 import { OrdersModule } from './orders/orders.module';
 import { AboutModule } from './about/about.module';
 
@@ -41,7 +43,7 @@ import { AboutModule } from './about/about.module';
           database: cfg.get<string>('POSTGRES_DB', 'ff14_db'),
           username: cfg.get<string>('POSTGRES_USER', 'ff14'),
           password,
-          entities: [BaseMaterial, MaterialIngredient, PartMaterial, SubmarinePart, Order, OrderItem, BulkDiscount, CrafterBulkDiscount],
+          entities: [BaseMaterial, MaterialIngredient, PartMaterial, SubmarinePart, Order, OrderItem, BulkDiscount, CrafterBulkDiscount, DiscountCode],
           migrations: [join(__dirname, '../../..', 'packages/entities/dist/migrations/*.js')],
           migrationsRun: true,
           namingStrategy: new SnakeNamingStrategy(),
@@ -59,6 +61,7 @@ import { AboutModule } from './about/about.module';
 
     DiscountsModule,
     CrafterDiscountsModule,
+    PromoCodesModule,
     OrdersModule,
     AboutModule,
   ],

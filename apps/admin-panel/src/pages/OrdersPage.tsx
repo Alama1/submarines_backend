@@ -21,6 +21,9 @@ const statusSelectClass =
 const isActiveOrder = (status: OrderStatus) =>
   status === 'confirmed' || status === 'in_progress';
 
+const canEditPromo = (status: OrderStatus) =>
+  status === 'pending' || status === 'confirmed' || status === 'in_progress';
+
 interface EditItemDraft {
   partId: string;
   quantity: number;
@@ -42,6 +45,7 @@ export const OrdersPage: React.FC = () => {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [draft, setDraft] = useState<EditOrderDraft | null>(null);
+  const [promoInput, setPromoInput] = useState('');
 
   const { data, isLoading } = useQuery<{ items: Order[]; total: number }>({
     queryKey: ['orders', statusFilter],
@@ -81,6 +85,16 @@ export const OrdersPage: React.FC = () => {
     },
   });
 
+  const promoMutation = useMutation({
+    mutationFn: ({ id, promoCode }: { id: string; promoCode: string | null }) =>
+      api.patch(`/orders/${id}/promo`, promoCode ? { promoCode } : {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['promo-codes'] });
+      setPromoInput((prev) => prev.trim().toUpperCase());
+    },
+  });
+
   const updateOrderMutation = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: EditOrderDraft }) =>
       api.put(`/orders/${id}`, {
@@ -102,6 +116,11 @@ export const OrdersPage: React.FC = () => {
       closeEdit();
     },
   });
+
+  const openDetails = (order: Order) => {
+    setSelectedOrder(order);
+    setPromoInput(order.promoCode ?? '');
+  };
 
   const openEdit = (order: Order) => {
     setEditingOrder(order);
@@ -241,7 +260,7 @@ export const OrdersPage: React.FC = () => {
                     </td>
                     <td className="px-5 py-3.5 text-right space-x-2 whitespace-nowrap">
                       <button
-                        onClick={() => setSelectedOrder(order)}
+                        onClick={() => openDetails(order)}
                         className="p-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-500 transition"
                         title="View Details"
                       >
@@ -362,7 +381,7 @@ export const OrdersPage: React.FC = () => {
 
               <div className="flex items-center gap-2 pt-2.5 border-t border-slate-100">
                 <button
-                  onClick={() => setSelectedOrder(order)}
+                  onClick={() => openDetails(order)}
                   className="p-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-500 transition flex-shrink-0"
                   title="View Details"
                 >
@@ -486,9 +505,14 @@ export const OrdersPage: React.FC = () => {
                 <span>Subtotal:</span>
                 <span className="font-mono">{formatGil(modalOrder.subtotal)}</span>
               </div>
-              {modalOrder.discountPct > 0 && (
+              {(modalOrder.discountAmt > 0 || modalOrder.discountPct > 0) && (
                 <div className="flex justify-between text-emerald-600">
-                  <span>Bulk Discount ({modalOrder.discountPct}%):</span>
+                  <span>
+                    {modalOrder.discountSource === 'promo'
+                      ? `Promo Code (${modalOrder.promoCode ?? '—'})`
+                      : `Bulk Discount (${modalOrder.discountPct}%)`}
+                    :
+                  </span>
                   <span className="font-mono">-{formatGil(modalOrder.discountAmt)}</span>
                 </div>
               )}
@@ -497,6 +521,64 @@ export const OrdersPage: React.FC = () => {
                 <span className="font-mono text-emerald-600">{formatGil(modalOrder.total)}</span>
               </div>
             </div>
+
+            {/* Promo code control */}
+            {canEditPromo(modalOrder.status) && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Promo Code
+                </h4>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={promoInput}
+                    onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                    placeholder={modalOrder.promoCode ?? 'Enter promo code'}
+                    maxLength={40}
+                    className="flex-1 min-w-0 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono uppercase text-slate-900 placeholder:text-slate-400 placeholder:font-sans focus:outline-none focus:border-emerald-500"
+                  />
+                  <button
+                    onClick={() =>
+                      promoMutation.mutate({ id: modalOrder.id, promoCode: promoInput.trim() || null })
+                    }
+                    disabled={promoMutation.isPending || !promoInput.trim()}
+                    className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium shadow-sm transition disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {promoMutation.isPending ? 'Applying…' : 'Apply'}
+                  </button>
+                  {modalOrder.promoCode && (
+                    <button
+                      onClick={() => {
+                        setPromoInput('');
+                        promoMutation.mutate({ id: modalOrder.id, promoCode: null });
+                      }}
+                      disabled={promoMutation.isPending}
+                      className="px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-600 text-xs font-medium hover:bg-slate-50 transition disabled:opacity-50 whitespace-nowrap"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  {modalOrder.promoCode
+                    ? `Applied: ${modalOrder.promoCode} (${modalOrder.discountSource === 'promo' ? 'active' : 'bulk discount was better'})`
+                    : 'No promo code applied. The best discount (promo vs bulk) wins — they never stack.'}
+                </p>
+                {promoMutation.isError && (
+                  <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                    {(() => {
+                      const err: any = promoMutation.error;
+                      const msg = err?.response?.data?.message;
+                      return typeof msg === 'string'
+                        ? msg
+                        : Array.isArray(msg)
+                          ? msg.join(', ')
+                          : 'Failed to apply the promo code.';
+                    })()}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Status control */}
             <div className="flex items-center justify-between pt-2 border-t border-slate-200">

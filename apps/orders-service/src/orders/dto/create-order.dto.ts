@@ -61,6 +61,11 @@ export class CreateOrderDto {
   @MaxLength(100)
   fulfillmentDt?: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  promoCode?: string;
+
   @IsArray()
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })

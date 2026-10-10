@@ -10,6 +10,8 @@ import { OrderItem } from './order-item.entity';
 
 export type OrderStatus = 'pending' | 'confirmed' | 'in_progress' | 'finished' | 'fulfilled' | 'cancelled';
 
+export type OrderDiscountSource = 'bulk' | 'promo';
+
 @Entity('orders')
 export class Order {
   @PrimaryGeneratedColumn('uuid')
@@ -38,6 +40,15 @@ export class Order {
 
   @Column({ type: 'int', default: 0 })
   discountAmt: number;
+
+  @Column({ type: 'varchar', length: 10, default: 'bulk' })
+  discountSource: OrderDiscountSource;
+
+  @Column({ type: 'uuid', nullable: true })
+  promoCodeId: string | null;
+
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  promoCode: string | null;
 
   @Column({ type: 'int' })
   total: number;
