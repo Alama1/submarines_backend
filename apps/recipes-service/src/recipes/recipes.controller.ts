@@ -8,9 +8,7 @@ import {
   Param,
   Post,
   Put,
-  UseInterceptors,
 } from '@nestjs/common';
-import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { RecipesService } from './recipes.service';
 import { CreatePartDto } from './dto/create-part.dto';
 import { UpdatePartDto } from './dto/update-part.dto';
@@ -21,8 +19,6 @@ export class RecipesController {
   constructor(private readonly svc: RecipesService) {}
 
   @Get()
-  @UseInterceptors(CacheInterceptor)
-  @CacheTTL(86_400)
   findAll() {
     return this.svc.findAll();
   }
@@ -33,8 +29,6 @@ export class RecipesController {
   }
 
   @Get(':id')
-  @UseInterceptors(CacheInterceptor)
-  @CacheTTL(86_400)
   findOne(@Param('id') id: string) {
     return this.svc.findOne(id);
   }

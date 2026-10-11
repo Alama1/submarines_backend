@@ -30,12 +30,42 @@ export class RecipesService {
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
+  /**
+   * Parts earmarked by orders that are being built (in_progress) or are built
+   * but not yet handed over (finished). Undelivered partial deliveries are
+   * counted only for their outstanding remainder.
+   */
+  private async reservedByPartId(): Promise<Map<string, number>> {
+    const rows: Array<{ part_id: string; reserved: number }> = await this.ds.query(
+      `SELECT oi.part_id, SUM(GREATEST(oi.quantity - oi.delivered_quantity, 0))::int AS reserved
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       WHERE o.status IN ('in_progress', 'finished')
+         AND oi.part_id IS NOT NULL
+       GROUP BY oi.part_id`,
+    );
+    return new Map(rows.map((r) => [r.part_id, Number(r.reserved)]));
+  }
+
+  /** Reports `stock` as the free (unreserved) count, like the craft planners do. */
+  private async withAvailableStock<T extends SubmarinePart>(
+    parts: T[],
+  ): Promise<Array<T & { expandedMaterials?: ExpandedMaterialRequirement[] }>> {
+    const reserved = await this.reservedByPartId();
+    const expanded = expandAllPartMaterials(parts);
+    return parts.map((p) => ({
+      ...p,
+      stock: Math.max(0, p.stock - (reserved.get(p.id) ?? 0)),
+      expandedMaterials: expanded.get(p.id) ?? [],
+    }));
+  }
+
   async findAll(): Promise<(SubmarinePart & { expandedMaterials?: ExpandedMaterialRequirement[] })[]> {
     const parts = await this.partRepo.find({
       order: { name: 'ASC' },
       relations: ['materials', 'materials.material'],
     });
-    return this.attachExpanded(parts);
+    return this.withAvailableStock(parts);
   }
 
   async findOne(id: string): Promise<SubmarinePart & { expandedMaterials?: ExpandedMaterialRequirement[] }> {
@@ -44,18 +74,8 @@ export class RecipesService {
       relations: ['materials', 'materials.material'],
     });
     if (!part) throw new NotFoundException(`Part "${id}" not found`);
-    const [withExpanded] = await this.attachExpanded([part]);
+    const [withExpanded] = await this.withAvailableStock([part]);
     return withExpanded;
-  }
-
-  private async attachExpanded(
-    parts: SubmarinePart[],
-  ): Promise<(SubmarinePart & { expandedMaterials?: ExpandedMaterialRequirement[] })[]> {
-    const expanded = expandAllPartMaterials(parts);
-    return parts.map((p) => ({
-      ...p,
-      expandedMaterials: expanded.get(p.id) ?? [],
-    }));
   }
 
   async recalculateMaterialTargets(): Promise<{
@@ -112,7 +132,10 @@ export class RecipesService {
   }
 
   async updateTarget(id: string, desiredStock: number): Promise<SubmarinePart> {
-    const part = await this.findOne(id);
+    // Raw repo read — findOne reports reservation-adjusted stock which must
+    // never be written back to the DB.
+    const part = await this.partRepo.findOne({ where: { id } });
+    if (!part) throw new NotFoundException(`Part "${id}" not found`);
     part.desiredStock = Math.max(0, desiredStock);
     await this.partRepo.save(part);
     await this.recalculateMaterialTargets();
@@ -188,7 +211,8 @@ export class RecipesService {
   }
 
   async remove(id: string): Promise<void> {
-    const part = await this.findOne(id);
+    const part = await this.partRepo.findOne({ where: { id } });
+    if (!part) throw new NotFoundException(`Part "${id}" not found`);
 
     const activeOrders: unknown[] = await this.ds.query(
       `SELECT oi.id
