@@ -17,6 +17,7 @@ import { UpdateOrderDto } from './dto/update-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-status.dto';
 import { UpdateOrderNotesDto } from './dto/update-notes.dto';
 import { ApplyPromoCodeDto } from './dto/apply-promo.dto';
+import { RecordDeliveryDto } from './dto/record-delivery.dto';
 
 @Controller('orders')
 export class OrdersController {
@@ -87,6 +88,14 @@ export class OrdersController {
     @Body() dto: UpdateOrderStatusDto,
   ) {
     return this.svc.updateStatus(id, dto);
+  }
+
+  @Post(':id/deliver')
+  recordDelivery(
+    @Param('id') id: string,
+    @Body() dto: RecordDeliveryDto,
+  ) {
+    return this.svc.recordDelivery(id, dto);
   }
 
   @Patch(':id/notes')

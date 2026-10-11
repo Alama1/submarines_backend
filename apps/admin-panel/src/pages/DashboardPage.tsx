@@ -16,6 +16,10 @@ import { StatusBadge } from '../components/StatusBadge';
 import { formatGil, formatNumber } from '../lib/utils';
 import { InProgressAggregate, InProgressOrderFeedItem } from '@ff14/types';
 
+/** Units still owed to the client = ordered − already handed over. */
+const remainingOf = (item: InProgressOrderFeedItem['items'][number]): number =>
+  item.remaining ?? Math.max(0, item.quantity - (item.deliveredQuantity ?? 0));
+
 export const DashboardPage: React.FC = () => {
   // Fetch in-progress orders (polled every 10s)
   const { data: inProgressData, isLoading: inProgressLoading } = useQuery<{
@@ -44,12 +48,12 @@ export const DashboardPage: React.FC = () => {
   const aggregateMaterials = aggregate?.materials ?? [];
   const shortfallCount = aggregateMaterials.filter((m) => m.missing > 0).length;
 
-  // Total parts to craft across all in-progress builds, sorted by name.
-  // Stock is per part (shared across builds), so to-craft = ordered - stock.
+  // Total parts still owed across all in-progress builds, sorted by name.
+  // Stock is per part (shared across builds), so to-craft = remaining - stock.
   const partTotals = React.useMemo(() => {
     const byName = new Map<
       string,
-      { name: string; partType: string | null; ordered: number; stock: number }
+      { name: string; partType: string | null; ordered: number; stock: number; delivered: number }
     >();
     for (const order of orders) {
       for (const item of order.items) {
@@ -58,8 +62,10 @@ export const DashboardPage: React.FC = () => {
           partType: item.partType,
           ordered: 0,
           stock: item.stock,
+          delivered: 0,
         };
-        entry.ordered += item.quantity;
+        entry.ordered += remainingOf(item);
+        entry.delivered += item.deliveredQuantity ?? 0;
         entry.stock = Math.max(entry.stock, item.stock);
         byName.set(item.partName, entry);
       }
@@ -223,15 +229,18 @@ export const DashboardPage: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {orders.map((order) => {
-              // Calculate overall completion percent
+              // Calculate overall completion percent (against what's still owed)
               let totalOrdered = 0;
               let totalCrafted = 0;
+              let totalDelivered = 0;
               for (const item of order.items) {
-                totalOrdered += item.quantity;
-                totalCrafted += Math.min(item.quantity, item.stock);
+                const remaining = remainingOf(item);
+                totalOrdered += remaining;
+                totalCrafted += Math.min(item.stock, remaining);
+                totalDelivered += item.deliveredQuantity ?? 0;
               }
               const overallPct =
-                totalOrdered > 0 ? Math.round((totalCrafted / totalOrdered) * 100) : 0;
+                totalOrdered > 0 ? Math.round((totalCrafted / totalOrdered) * 100) : 100;
 
               return (
                 <div
@@ -270,6 +279,11 @@ export const DashboardPage: React.FC = () => {
                       <p className="text-[10px] text-slate-400">
                         {totalCrafted} / {totalOrdered} parts
                       </p>
+                      {totalDelivered > 0 && (
+                        <p className="text-[10px] text-emerald-600 font-bold">
+                          {totalDelivered} delivered
+                        </p>
+                      )}
                       <span
                         className={`text-[11px] font-bold ${
                           order.financials.profit >= 0
@@ -294,11 +308,13 @@ export const DashboardPage: React.FC = () => {
                   {/* Individual parts breakdown */}
                   <div className="space-y-2.5 pt-1">
                     {order.items.map((item, idx) => {
-                      const itemPct = Math.min(
-                        100,
-                        Math.round((item.stock / item.quantity) * 100)
-                      );
-                      const isComplete = item.stock >= item.quantity;
+                      const remaining = remainingOf(item);
+                      const delivered = item.deliveredQuantity ?? 0;
+                      const itemPct =
+                        remaining > 0
+                          ? Math.min(100, Math.round((item.stock / remaining) * 100))
+                          : 100;
+                      const isComplete = item.stock >= remaining;
 
                       return (
                         <div key={idx} className="space-y-1">
@@ -318,7 +334,10 @@ export const DashboardPage: React.FC = () => {
                                   : 'text-slate-500'
                               }`}
                             >
-                              {item.stock} / {item.quantity}
+                              {item.stock} / {remaining}
+                              {delivered > 0 && (
+                                <span className="text-emerald-600"> · {delivered} del.</span>
+                              )}
                             </span>
                           </div>
                           <div className="w-full bg-slate-200/80 h-1.5 rounded-full overflow-hidden">
@@ -439,6 +458,9 @@ export const DashboardPage: React.FC = () => {
                   <span className="text-slate-500 font-mono whitespace-nowrap">
                     need <strong className="text-slate-800">{formatNumber(p.ordered)}</strong>
                     {' · '}have <strong className="text-slate-800">{formatNumber(p.stock)}</strong>
+                    {p.delivered > 0 && (
+                      <>{' · '}delivered <strong className="text-emerald-600">{formatNumber(p.delivered)}</strong></>
+                    )}
                   </span>
                   {p.toCraft > 0 ? (
                     <span className="font-mono px-2 py-0.5 rounded bg-cyan-50 border border-cyan-200 text-cyan-700 font-bold whitespace-nowrap">

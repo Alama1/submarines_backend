@@ -24,6 +24,9 @@ const isActiveOrder = (status: OrderStatus) =>
 const canEditPromo = (status: OrderStatus) =>
   status === 'pending' || status === 'confirmed' || status === 'in_progress';
 
+const canDeliver = (status: OrderStatus) =>
+  status === 'confirmed' || status === 'in_progress' || status === 'finished';
+
 interface EditItemDraft {
   partId: string;
   quantity: number;
@@ -46,6 +49,7 @@ export const OrdersPage: React.FC = () => {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [draft, setDraft] = useState<EditOrderDraft | null>(null);
   const [promoInput, setPromoInput] = useState('');
+  const [deliveryDraft, setDeliveryDraft] = useState<Record<number, number>>({});
 
   const { data, isLoading } = useQuery<{ items: Order[]; total: number }>({
     queryKey: ['orders', statusFilter],
@@ -95,6 +99,20 @@ export const OrdersPage: React.FC = () => {
     },
   });
 
+  const deliveryMutation = useMutation({
+    mutationFn: ({
+      id,
+      items,
+    }: {
+      id: string;
+      items: { itemId: number; deliveredQuantity: number }[];
+    }) => api.post(`/orders/${id}/deliver`, { items }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['in-progress-orders'] });
+    },
+  });
+
   const updateOrderMutation = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: EditOrderDraft }) =>
       api.put(`/orders/${id}`, {
@@ -120,6 +138,12 @@ export const OrdersPage: React.FC = () => {
   const openDetails = (order: Order) => {
     setSelectedOrder(order);
     setPromoInput(order.promoCode ?? '');
+    const delivered: Record<number, number> = {};
+    for (const item of order.items ?? []) {
+      if (item.id != null) delivered[item.id] = item.deliveredQuantity ?? 0;
+    }
+    setDeliveryDraft(delivered);
+    deliveryMutation.reset();
   };
 
   const openEdit = (order: Order) => {
@@ -485,6 +509,11 @@ export const OrdersPage: React.FC = () => {
                       {item.buildName && (
                         <span className="text-slate-400 ml-2">({item.buildName})</span>
                       )}
+                      {(item.deliveredQuantity ?? 0) > 0 && (
+                        <span className="ml-2 inline-flex items-center rounded-md bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                          {item.deliveredQuantity}/{item.quantity} delivered
+                        </span>
+                      )}
                     </div>
                     <div className="text-right">
                       <span className="text-slate-500">
@@ -498,6 +527,94 @@ export const OrdersPage: React.FC = () => {
                 ))}
               </div>
             </div>
+
+            {/* Partial delivery — record how many units were physically handed over */}
+            {canDeliver(modalOrder.status) && (modalOrder.items ?? []).length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Deliveries (partial allowed)
+                  </h4>
+                  <span className="text-[11px] text-slate-400">
+                    Set how many units the client received
+                  </span>
+                </div>
+                <div className="bg-slate-50 rounded-lg border border-slate-200 divide-y divide-slate-200">
+                  {(modalOrder.items ?? []).map((item) => {
+                    const itemId = item.id!;
+                    const max = item.quantity;
+                    const value = deliveryDraft[itemId] ?? item.deliveredQuantity ?? 0;
+                    const fully = value >= max;
+                    return (
+                      <div key={itemId} className="p-3 flex items-center justify-between gap-3 text-xs">
+                        <div className="min-w-0">
+                          <span className="font-medium text-slate-800">{item.partName}</span>
+                          <span className="text-slate-400 ml-2">ordered {max}</span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <input
+                            type="number"
+                            min={0}
+                            max={max}
+                            value={value}
+                            onChange={(e) => {
+                              const parsed = parseInt(e.target.value, 10);
+                              setDeliveryDraft((prev) => ({
+                                ...prev,
+                                [itemId]: Math.max(0, Math.min(max, isNaN(parsed) ? 0 : parsed)),
+                              }));
+                            }}
+                            className={`w-20 px-2 py-1.5 bg-white border rounded-lg text-xs font-mono text-slate-900 focus:outline-none focus:border-emerald-500 ${
+                              fully ? 'border-emerald-300' : 'border-slate-300'
+                            }`}
+                          />
+                          <span
+                            className={`w-16 text-right font-bold ${
+                              fully ? 'text-emerald-600' : 'text-slate-400'
+                            }`}
+                          >
+                            {fully ? 'done' : `${value}/${max}`}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[11px] text-slate-400">
+                    The order auto-completes (Fulfilled) once every item reaches its ordered quantity.
+                  </p>
+                  <button
+                    onClick={() =>
+                      deliveryMutation.mutate({
+                        id: modalOrder.id,
+                        items: (modalOrder.items ?? []).map((item) => ({
+                          itemId: item.id!,
+                          deliveredQuantity: deliveryDraft[item.id!] ?? item.deliveredQuantity ?? 0,
+                        })),
+                      })
+                    }
+                    disabled={deliveryMutation.isPending}
+                    className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium shadow-sm transition disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {deliveryMutation.isPending ? 'Saving…' : 'Save Deliveries'}
+                  </button>
+                </div>
+                {deliveryMutation.isError && (
+                  <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                    {(() => {
+                      const err: any = deliveryMutation.error;
+                      const msg = err?.response?.data?.message;
+                      return typeof msg === 'string'
+                        ? msg
+                        : Array.isArray(msg)
+                          ? msg.join(', ')
+                          : 'Failed to record the delivery.';
+                    })()}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Financial Summary */}
             <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-xs space-y-1.5">

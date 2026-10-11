@@ -25,6 +25,7 @@ import { UpdateOrderDto } from './dto/update-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-status.dto';
 import { UpdateOrderNotesDto } from './dto/update-notes.dto';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
+import { RecordDeliveryDto } from './dto/record-delivery.dto';
 
 interface PreparedOrderItem {
   part: SubmarinePart | null;
@@ -58,6 +59,13 @@ export class OrdersService {
     'pending',
     'confirmed',
     'in_progress',
+  ]);
+
+  /** Statuses from which parts can be handed over (partial deliveries). */
+  private static readonly DELIVERABLE_STATUSES = new Set<OrderStatus>([
+    'confirmed',
+    'in_progress',
+    'finished',
   ]);
 
   constructor(
@@ -146,8 +154,10 @@ export class OrdersService {
         partName: string;
         partType: string | null;
         buildName: string | null;
-        quantity: number;   // ordered
-        stock: number;      // ready in retainers minus parts reserved by finished (undelivered) orders
+        quantity: number;          // ordered
+        deliveredQuantity: number; // already handed over (partial deliveries)
+        remaining: number;         // quantity - deliveredQuantity — still owed to the client
+        stock: number;             // ready in retainers minus parts reserved by finished (undelivered) orders
         unitPrice: number;
         lineTotal: number;
       }>;
@@ -216,9 +226,12 @@ export class OrdersService {
     for (const o of finishedOrders) {
       for (const item of o.items ?? []) {
         if (!item.part?.id) continue;
+        // Only the not-yet-delivered remainder is still sitting in retainers.
+        const remaining = Math.max(0, item.quantity - (item.deliveredQuantity ?? 0));
+        if (remaining <= 0) continue;
         reservedByPart.set(
           item.part.id,
-          (reservedByPart.get(item.part.id) ?? 0) + item.quantity,
+          (reservedByPart.get(item.part.id) ?? 0) + remaining,
         );
       }
     }
@@ -261,12 +274,15 @@ export class OrdersService {
           materialCost += (costPerPart.get(part.id) ?? 0) * item.quantity;
           partsRevenue += item.lineTotal;
         }
+        const remaining = Math.max(0, item.quantity - (item.deliveredQuantity ?? 0));
         return {
           partId: item.part?.id ?? '',
           partName: item.partName,
           partType: item.partType,
           buildName: item.buildName,
           quantity: item.quantity,
+          deliveredQuantity: item.deliveredQuantity ?? 0,
+          remaining,
           stock: part ? (effStock.get(part.id) ?? part.stock) : 0,
           unitPrice: item.unitPrice,
           lineTotal: item.lineTotal,
@@ -350,8 +366,10 @@ export class OrdersService {
       for (const item of o.items ?? []) {
         const part = partsById.get(item.part?.id ?? '') ?? item.part;
         if (!part) continue;
+        // Parts already handed over (partial deliveries) need no crafting.
+        const remaining = Math.max(0, item.quantity - (item.deliveredQuantity ?? 0));
         const stock = effStock?.get(part.id) ?? part.stock;
-        const toCraft = Math.max(0, item.quantity - stock); // only craft what stock doesn't cover
+        const toCraft = Math.max(0, remaining - stock); // only craft what stock doesn't cover
         if (toCraft <= 0) continue;
         demandByPart.set(part.id, (demandByPart.get(part.id) ?? 0) + toCraft);
       }
@@ -454,8 +472,10 @@ export class OrdersService {
     for (const item of order.items ?? []) {
       const part = partsById.get(item.part?.id ?? '') ?? item.part;
       if (!part) continue;
+      // Parts already handed over (partial deliveries) need no crafting.
+      const remaining = Math.max(0, item.quantity - (item.deliveredQuantity ?? 0));
       const stock = effStock?.get(part.id) ?? part.stock;
-      const toCraft = Math.max(0, item.quantity - stock);
+      const toCraft = Math.max(0, remaining - stock);
       if (toCraft <= 0) continue;
 
       for (const req of expanded.get(part.id) ?? []) {
@@ -764,7 +784,73 @@ export class OrdersService {
   async updateStatus(id: string, dto: UpdateOrderStatusDto): Promise<Order> {
     const order = await this.findOne(id);
     order.status = dto.status;
-    await this.orderRepo.save(order);
+
+    // Marking an order fulfilled by hand counts as a full delivery, so partial
+    // delivery bookkeeping stays consistent with the status.
+    if (dto.status === 'fulfilled' && (order.items ?? []).length > 0) {
+      await this.ds.transaction(async (em) => {
+        for (const item of order.items ?? []) {
+          if (item.deliveredQuantity !== item.quantity) {
+            item.deliveredQuantity = item.quantity;
+            await em.save(item);
+          }
+        }
+        await em.save(order);
+      });
+    } else {
+      await this.orderRepo.save(order);
+    }
+    return this.findOne(id);
+  }
+
+  /**
+   * Records (or corrects) how many units of each item were handed over.
+   * `deliveredQuantity` is absolute per item, so re-sending a smaller value
+   * fixes a mistake. Once every item is fully delivered the order is marked
+   * fulfilled automatically.
+   */
+  async recordDelivery(id: string, dto: RecordDeliveryDto): Promise<Order> {
+    const order = await this.findOne(id);
+    if (!OrdersService.DELIVERABLE_STATUSES.has(order.status)) {
+      throw new BadRequestException(
+        `Order "${order.orderCode}" is "${order.status}" — deliveries can only be recorded for active orders`,
+      );
+    }
+
+    const itemsById = new Map((order.items ?? []).map((i) => [i.id, i]));
+
+    for (const line of dto.items) {
+      const item = itemsById.get(line.itemId);
+      if (!item) {
+        throw new NotFoundException(
+          `Item ${line.itemId} does not belong to order "${order.orderCode}"`,
+        );
+      }
+      if (line.deliveredQuantity > item.quantity) {
+        throw new BadRequestException(
+          `Cannot deliver ${line.deliveredQuantity} × ${item.partName} — only ${item.quantity} were ordered`,
+        );
+      }
+    }
+
+    await this.ds.transaction(async (em) => {
+      for (const line of dto.items) {
+        const item = itemsById.get(line.itemId)!;
+        if (item.deliveredQuantity !== line.deliveredQuantity) {
+          item.deliveredQuantity = line.deliveredQuantity;
+          await em.save(item);
+        }
+      }
+
+      const fullyDelivered = (order.items ?? []).every(
+        (i) => i.deliveredQuantity >= i.quantity,
+      );
+      if (fullyDelivered) {
+        order.status = 'fulfilled';
+        await em.save(order);
+      }
+    });
+
     return this.findOne(id);
   }
 

@@ -22,6 +22,10 @@ export class OrderItem {
   @Column({ type: 'int' })
   quantity: number;
 
+  /** How many of `quantity` have actually been handed over (partial deliveries). */
+  @Column({ type: 'int', default: 0 })
+  deliveredQuantity: number;
+
   @Column({ type: 'int' })
   unitPrice: number;
 

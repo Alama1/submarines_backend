@@ -16,6 +16,8 @@ export interface OrderItem {
   partName: string;
   partType: string | null;
   quantity: number;
+  /** Handed over so far (partial deliveries); undefined on legacy payloads. */
+  deliveredQuantity?: number;
   unitPrice: number;
   lineTotal: number;
   buildName: string | null;
@@ -109,6 +111,15 @@ export interface CreateOrderDto {
   fulfillmentDt?: string;
 }
 
+/** Records / corrects how many units of each order item were handed over. */
+export interface RecordDeliveryDto {
+  items: Array<{
+    itemId: number;
+    /** Absolute delivered count (0..quantity) — setting it corrects previous values. */
+    deliveredQuantity: number;
+  }>;
+}
+
 export interface InProgressOrderFeedItem {
   id: string;
   orderCode: string;
@@ -125,6 +136,8 @@ export interface InProgressOrderFeedItem {
     partType: string | null;
     buildName: string | null;
     quantity: number;
+    deliveredQuantity: number;
+    remaining: number;
     stock: number;
     unitPrice: number;
     lineTotal: number;
