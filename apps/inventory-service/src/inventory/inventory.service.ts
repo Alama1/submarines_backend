@@ -230,14 +230,15 @@ export class InventoryService {
       const order = orderNeeds.get(m.id);
       const orderNeeded = order?.needed ?? 0;
       const orderMissing = order?.missing ?? 0;
+      const totalMissing = base.deficit + orderMissing;
       return {
         ...base,
         claimed,
-        remaining: Math.max(0, base.deficit - claimed),
+        remaining: Math.max(0, totalMissing - claimed),
         claims,
         orderNeeded,
         orderMissing,
-        totalMissing: base.deficit + orderMissing,
+        totalMissing,
       };
     });
 

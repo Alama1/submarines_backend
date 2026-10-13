@@ -202,7 +202,7 @@ describe('InventoryService — claims', () => {
     it('adds in-progress order demand on top of the stock-target deficit', async () => {
       const qb = makeQb([{ ...material, currentStock: 6000 }]);
       matRepo.createQueryBuilder.mockReturnValue(qb);
-      claimRepo.find.mockResolvedValue([]);
+      claimRepo.find.mockResolvedValue([claim('c1', 2000, 'Alice')]);
       process.env.ORDERS_SERVICE_URL = 'http://orders-test:3003';
       jest.spyOn(global, 'fetch').mockResolvedValue(
         orderAggregate([{ materialId: 'mat-1', needed: 30000, missing: 24000 }]),
@@ -215,6 +215,8 @@ describe('InventoryService — claims', () => {
         orderNeeded: 30000,
         orderMissing: 24000,
         totalMissing: 28000,
+        // claims count against the combined target + order need
+        remaining: 26000,
       });
     });
 
