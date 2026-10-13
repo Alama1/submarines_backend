@@ -230,7 +230,13 @@ export class InventoryService {
       const order = orderNeeds.get(m.id);
       const orderNeeded = order?.needed ?? 0;
       const orderMissing = order?.missing ?? 0;
-      const totalMissing = base.deficit + orderMissing;
+      // Orders consume shelf stock first; the target is refilled from
+      // whatever stock survives the orders — never from the same stock twice.
+      const stockLeftAfterOrders = Math.max(0, base.currentStock - orderNeeded);
+      const totalMissing =
+        base.whereToBuy === MaterialSource.NPC
+          ? 0
+          : orderMissing + Math.max(0, base.desiredQuantity - stockLeftAfterOrders);
       return {
         ...base,
         claimed,

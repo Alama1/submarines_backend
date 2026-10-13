@@ -214,10 +214,59 @@ describe('InventoryService — claims', () => {
         deficit: 4000,
         orderNeeded: 30000,
         orderMissing: 24000,
-        totalMissing: 28000,
-        // claims count against the combined target + order need
-        remaining: 26000,
+        // orders eat the 6000 stock, then the 10000 target is refilled from zero
+        totalMissing: 34000,
+        // claims count against the combined need
+        remaining: 32000,
       });
+    });
+
+    it('refills the target from surviving stock, not from stock the orders consume', async () => {
+      // the Iron Nails shape: 9844 in stock, order needs 18759 (missing 8915),
+      // target 13560 — after the order nothing is left, so the full target
+      // must be gathered: 8915 + 13560 = 22475.
+      const qb = makeQb([
+        { ...material, id: 'nails', name: 'Iron Nails', currentStock: 9844, desiredQuantity: 13560 },
+      ]);
+      matRepo.createQueryBuilder.mockReturnValue(qb);
+      claimRepo.find.mockResolvedValue([
+        {
+          id: 'c1',
+          materialId: 'nails',
+          claimedFor: 'Alice',
+          quantity: 13560,
+          createdAt: new Date(),
+        } as MaterialClaim,
+      ]);
+      process.env.ORDERS_SERVICE_URL = 'http://orders-test:3003';
+      jest.spyOn(global, 'fetch').mockResolvedValue(
+        orderAggregate([{ materialId: 'nails', needed: 18759, missing: 8915 }]),
+      );
+
+      const result = await svc.findMissing(undefined, 1, 50);
+
+      expect(result.items[0]).toMatchObject({
+        totalMissing: 22475,
+        remaining: 8915, // the 13560 claim covers the target, the order gap stays open
+      });
+    });
+
+    it('keeps target-refill demand for rows whose order is fully covered by stock', async () => {
+      // order fully covered (missing 0), but it consumes stock below the target
+      const qb = makeQb([
+        { ...material, id: 'rivets', name: 'Cobalt Rivets', currentStock: 19229, desiredQuantity: 31560 },
+      ]);
+      matRepo.createQueryBuilder.mockReturnValue(qb);
+      claimRepo.find.mockResolvedValue([]);
+      process.env.ORDERS_SERVICE_URL = 'http://orders-test:3003';
+      jest.spyOn(global, 'fetch').mockResolvedValue(
+        orderAggregate([{ materialId: 'rivets', needed: 10101, missing: 0 }]),
+      );
+
+      const result = await svc.findMissing(undefined, 1, 50);
+
+      // 19229 - 10101 = 9128 left; 31560 - 9128 = 22432 to refill
+      expect(result.items[0]).toMatchObject({ orderMissing: 0, totalMissing: 22432 });
     });
 
     it('lists materials only demanded by in-progress builds and sorts by total missing', async () => {
