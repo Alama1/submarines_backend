@@ -1,6 +1,7 @@
 import {
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -57,6 +58,12 @@ export interface MissingMaterialItem extends InventoryItemStock {
   claimed: number;
   remaining: number;
   claims: MaterialClaimSummary[];
+  /** Raw materials demanded by current in-progress builds. */
+  orderNeeded: number;
+  /** Shortfall of that demand after current stock. */
+  orderMissing: number;
+  /** deficit + orderMissing — total units crafters need to gather. */
+  totalMissing: number;
 }
 
 export interface IngestResponse {
@@ -69,6 +76,8 @@ export interface IngestResponse {
 
 @Injectable()
 export class InventoryService {
+  private readonly logger = new Logger(InventoryService.name);
+
   constructor(
     @InjectRepository(BaseMaterial)
     private readonly repo: Repository<BaseMaterial>,
@@ -139,46 +148,113 @@ export class InventoryService {
     return { items: materials.map((m) => this.mapToStockItem(m)), total };
   }
 
+  /**
+   * Per-material demand of all in-progress builds, straight from the
+   * orders-service aggregate so both views always show the same numbers.
+   */
+  private async fetchOrderNeeds(): Promise<
+    Map<string, { needed: number; missing: number }>
+  > {
+    const needs = new Map<string, { needed: number; missing: number }>();
+    const base = process.env.ORDERS_SERVICE_URL;
+    if (!base) return needs;
+
+    try {
+      const res = await fetch(
+        `${base.replace(/\/$/, '')}/api/orders/in-progress`,
+        {
+          headers: { 'x-internal-token': process.env.INTERNAL_TOKEN ?? '' },
+          signal: AbortSignal.timeout(3000),
+        },
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = (await res.json()) as {
+        aggregate?: {
+          materials?: Array<{
+            materialId: string;
+            needed: number;
+            missing: number;
+          }>;
+        };
+      };
+      for (const m of body.aggregate?.materials ?? []) {
+        needs.set(m.materialId, { needed: m.needed, missing: m.missing });
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Could not fetch in-progress order materials from orders-service (${(err as Error).message}) — /inventory/missing falls back to stock targets only`,
+      );
+    }
+    return needs;
+  }
+
   async findMissing(
     search?: string,
     page = 1,
     limit = 50,
   ): Promise<{ items: MissingMaterialItem[]; total: number }> {
+    const orderNeeds = await this.fetchOrderNeeds();
+
     const qb = this.repo
       .createQueryBuilder('m')
       .leftJoin(SubmarinePart, 'p', 'LOWER(p.name) = LOWER(m.name)')
       .where('m.category != :repair', { repair: MaterialCategory.REPAIR })
       .andWhere('m.desiredQuantity > 0')
       .andWhere('p.id IS NULL');
-    if (search) {
-      qb.andWhere('LOWER(m.name) LIKE :search', {
-        search: `%${search.toLowerCase()}%`,
-      });
-    }
-    const [materials, total] = await qb
+
+    // No SQL pagination — the merged list is sorted and sliced in JS below.
+    const materials = await qb
       .addSelect('m.desired_quantity - m.current_stock', 'deficit_calc')
       .orderBy('deficit_calc', 'DESC')
-      .skip((page - 1) * limit)
-      .take(limit)
-      .getManyAndCount();
+      .getMany();
+
+    // Materials demanded only by in-progress builds (no stock target of their own).
+    const orderOnlyIds = [...orderNeeds.keys()].filter(
+      (id) => !materials.some((m) => m.id === id),
+    );
+    if (orderOnlyIds.length) {
+      const extra = await this.repo.find({ where: { id: In(orderOnlyIds) } });
+      materials.push(
+        ...extra.filter((m) => m.category !== MaterialCategory.REPAIR),
+      );
+    }
 
     const claimsByMaterial = await this.getClaimsByMaterial(
       materials.map((m) => m.id),
     );
 
-    const items = materials.map((m) => {
+    let items = materials.map((m) => {
       const base = this.mapToStockItem(m);
       const claims = claimsByMaterial.get(m.id) ?? [];
       const claimed = claims.reduce((sum, c) => sum + c.quantity, 0);
+      const order = orderNeeds.get(m.id);
+      const orderNeeded = order?.needed ?? 0;
+      const orderMissing = order?.missing ?? 0;
       return {
         ...base,
         claimed,
         remaining: Math.max(0, base.deficit - claimed),
         claims,
+        orderNeeded,
+        orderMissing,
+        totalMissing: base.deficit + orderMissing,
       };
     });
 
-    return { items, total };
+    if (search) {
+      const q = search.toLowerCase();
+      items = items.filter((m) => m.name.toLowerCase().includes(q));
+    }
+
+    items.sort(
+      (a, b) =>
+        b.totalMissing - a.totalMissing || a.name.localeCompare(b.name),
+    );
+
+    return {
+      items: items.slice((page - 1) * limit, page * limit),
+      total: items.length,
+    };
   }
 
   private async getClaimsByMaterial(

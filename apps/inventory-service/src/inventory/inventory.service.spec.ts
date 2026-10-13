@@ -108,19 +108,28 @@ describe('InventoryService — claims', () => {
   });
 
   describe('findMissing', () => {
-    const makeQb = (result: [unknown[], number]) => ({
+    const makeQb = (result: unknown[]) => ({
       leftJoin: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
       addSelect: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
-      skip: jest.fn().mockReturnThis(),
-      take: jest.fn().mockReturnThis(),
-      getManyAndCount: jest.fn().mockResolvedValue(result),
+      getMany: jest.fn().mockResolvedValue(result),
+    });
+
+    const orderAggregate = (materials: unknown[]) =>
+      ({
+        ok: true,
+        json: async () => ({ aggregate: { materials } }),
+      }) as Response;
+
+    afterEach(() => {
+      delete process.env.ORDERS_SERVICE_URL;
+      jest.restoreAllMocks();
     });
 
     it('aggregates claimed amounts and computes the unclaimed remainder', async () => {
-      const qb = makeQb([[material], 1]);
+      const qb = makeQb([material]);
       matRepo.createQueryBuilder.mockReturnValue(qb);
       claimRepo.find.mockResolvedValue([
         claim('c1', 3000, 'Alice'),
@@ -135,12 +144,15 @@ describe('InventoryService — claims', () => {
         deficit: 10000,
         claimed: 5000,
         remaining: 5000,
+        orderNeeded: 0,
+        orderMissing: 0,
+        totalMissing: 10000,
       });
       expect(result.items[0].claims).toHaveLength(2);
     });
 
     it('never reports a negative remainder when claims exceed the deficit', async () => {
-      const qb = makeQb([[material], 1]);
+      const qb = makeQb([material]);
       matRepo.createQueryBuilder.mockReturnValue(qb);
       claimRepo.find.mockResolvedValue([claim('c1', 12000, 'Alice')]);
 
@@ -150,20 +162,20 @@ describe('InventoryService — claims', () => {
       expect(result.items[0].remaining).toBe(0);
     });
 
-    it('applies the search filter to the missing-materials query', async () => {
-      const qb = makeQb([[], 0]);
+    it('filters the merged list by search', async () => {
+      const other = { ...material, id: 'mat-2', name: 'Iron Ore' };
+      const qb = makeQb([material, other]);
       matRepo.createQueryBuilder.mockReturnValue(qb);
       claimRepo.find.mockResolvedValue([]);
 
-      await svc.findMissing('cobalt', 1, 50);
+      const result = await svc.findMissing('cobalt', 1, 50);
 
-      expect(qb.andWhere).toHaveBeenCalledWith('LOWER(m.name) LIKE :search', {
-        search: '%cobalt%',
-      });
+      expect(result.total).toBe(1);
+      expect(result.items[0].name).toBe('Cobalt Ingot');
     });
 
     it('excludes submarine part rows from the missing-materials list', async () => {
-      const qb = makeQb([[], 0]);
+      const qb = makeQb([]);
       matRepo.createQueryBuilder.mockReturnValue(qb);
       claimRepo.find.mockResolvedValue([]);
 
@@ -178,13 +190,94 @@ describe('InventoryService — claims', () => {
     });
 
     it('excludes materials with a zero desired quantity', async () => {
-      const qb = makeQb([[], 0]);
+      const qb = makeQb([]);
       matRepo.createQueryBuilder.mockReturnValue(qb);
       claimRepo.find.mockResolvedValue([]);
 
       await svc.findMissing(undefined, 1, 50);
 
       expect(qb.andWhere).toHaveBeenCalledWith('m.desiredQuantity > 0');
+    });
+
+    it('adds in-progress order demand on top of the stock-target deficit', async () => {
+      const qb = makeQb([{ ...material, currentStock: 6000 }]);
+      matRepo.createQueryBuilder.mockReturnValue(qb);
+      claimRepo.find.mockResolvedValue([]);
+      process.env.ORDERS_SERVICE_URL = 'http://orders-test:3003';
+      jest.spyOn(global, 'fetch').mockResolvedValue(
+        orderAggregate([{ materialId: 'mat-1', needed: 30000, missing: 24000 }]),
+      );
+
+      const result = await svc.findMissing(undefined, 1, 50);
+
+      expect(result.items[0]).toMatchObject({
+        deficit: 4000,
+        orderNeeded: 30000,
+        orderMissing: 24000,
+        totalMissing: 28000,
+      });
+    });
+
+    it('lists materials only demanded by in-progress builds and sorts by total missing', async () => {
+      const qb = makeQb([material]);
+      matRepo.createQueryBuilder.mockReturnValue(qb);
+      matRepo.find.mockResolvedValue([
+        {
+          ...material,
+          id: 'mat-order-only',
+          name: 'Order Only Ore',
+          desiredQuantity: 0,
+          currentStock: 0,
+        },
+      ]);
+      claimRepo.find.mockResolvedValue([]);
+      process.env.ORDERS_SERVICE_URL = 'http://orders-test:3003';
+      jest.spyOn(global, 'fetch').mockResolvedValue(
+        orderAggregate([
+          { materialId: 'mat-order-only', needed: 900, missing: 900 },
+        ]),
+      );
+
+      const result = await svc.findMissing(undefined, 1, 50);
+
+      expect(result.total).toBe(2);
+      expect(result.items[0]).toMatchObject({ name: 'Cobalt Ingot', totalMissing: 10000 });
+      expect(result.items[1]).toMatchObject({
+        name: 'Order Only Ore',
+        desiredQuantity: 0,
+        deficit: 0,
+        orderMissing: 900,
+        totalMissing: 900,
+      });
+    });
+
+    it('falls back to stock targets only when orders-service is unreachable', async () => {
+      const qb = makeQb([material]);
+      matRepo.createQueryBuilder.mockReturnValue(qb);
+      claimRepo.find.mockResolvedValue([]);
+      process.env.ORDERS_SERVICE_URL = 'http://orders-test:3003';
+      jest.spyOn(global, 'fetch').mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+      const result = await svc.findMissing(undefined, 1, 50);
+
+      expect(result.items[0]).toMatchObject({
+        orderNeeded: 0,
+        orderMissing: 0,
+        totalMissing: 10000,
+      });
+    });
+
+    it('paginates the merged list in memory', async () => {
+      const second = { ...material, id: 'mat-2', name: 'Iron Ore', desiredQuantity: 100 };
+      const qb = makeQb([material, second]);
+      matRepo.createQueryBuilder.mockReturnValue(qb);
+      claimRepo.find.mockResolvedValue([]);
+
+      const result = await svc.findMissing(undefined, 2, 1);
+
+      expect(result.total).toBe(2);
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].name).toBe('Iron Ore');
     });
   });
 

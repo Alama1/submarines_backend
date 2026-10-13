@@ -96,6 +96,7 @@ services:
       <<: *internal-env
       POSTGRES_HOST: postgres
       RABBITMQ_URL: amqp://ff14:ff14local@rabbitmq:5672
+      ORDERS_SERVICE_URL: http://orders-service:3003
     env_file:
       - path: ./apps/inventory-service/.env.local
         required: false

@@ -700,13 +700,14 @@ export const InventoryPage: React.FC = () => {
               ) : (
                 items.map((mat) => {
                   const hasDeficit = mat.currentStock < mat.desiredQuantity;
+                  const hasOrderDemand = (mat.orderMissing ?? 0) > 0;
                   const isNpc = mat.whereToBuy === 'NPC';
 
                   return (
                     <tr
                       key={mat.id}
                       className={`hover:bg-slate-50 transition ${
-                        hasDeficit ? 'bg-rose-50/50' : ''
+                        hasDeficit || hasOrderDemand ? 'bg-rose-50/50' : ''
                       }`}
                     >
                       <td className="px-5 py-3.5 font-medium text-slate-900">
@@ -741,15 +742,25 @@ export const InventoryPage: React.FC = () => {
                         />
                       </td>
                       <td className="px-5 py-3.5">
-                        {hasDeficit ? (
-                          <span className="font-mono text-xs px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-semibold">
-                            -{formatNumber(mat.desiredQuantity - mat.currentStock)}
-                          </span>
-                        ) : (
-                          <span className="font-mono text-xs px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700">
-                            +OK
-                          </span>
-                        )}
+                        <div className="flex flex-wrap items-center gap-1">
+                          {hasDeficit ? (
+                            <span className="font-mono text-xs px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-semibold">
+                              -{formatNumber(mat.desiredQuantity - mat.currentStock)}
+                            </span>
+                          ) : (
+                            <span className="font-mono text-xs px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700">
+                              +OK
+                            </span>
+                          )}
+                          {hasOrderDemand && (
+                            <span
+                              className="font-mono text-xs px-2 py-0.5 rounded bg-orange-50 border border-orange-200 text-orange-700 font-semibold"
+                              title="Shortfall for in-progress orders, after current stock"
+                            >
+                              +{formatNumber(mat.orderMissing)} orders
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-3.5">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${sourceBadgeClass(mat.whereToBuy)}`}>
@@ -787,10 +798,11 @@ export const InventoryPage: React.FC = () => {
         ) : (
           items.map((mat) => {
             const hasDeficit = mat.currentStock < mat.desiredQuantity;
+            const hasOrderDemand = (mat.orderMissing ?? 0) > 0;
             const isNpc = mat.whereToBuy === 'NPC';
 
             return (
-              <div key={mat.id} className={`p-4 space-y-3 ${hasDeficit ? 'bg-rose-50/50' : ''}`}>
+              <div key={mat.id} className={`p-4 space-y-3 ${hasDeficit || hasOrderDemand ? 'bg-rose-50/50' : ''}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="text-sm font-semibold text-slate-900 break-words">
@@ -800,15 +812,27 @@ export const InventoryPage: React.FC = () => {
                       ID: {mat.itemId || '—'}
                     </div>
                   </div>
-                  {hasDeficit ? (
-                    <span className="font-mono text-xs px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-semibold flex-shrink-0">
-                      -{formatNumber(mat.desiredQuantity - mat.currentStock)}
-                    </span>
-                  ) : (
-                    <span className="font-mono text-xs px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 flex-shrink-0">
-                      +OK
-                    </span>
-                  )}
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <div className="flex items-center gap-1">
+                      {hasDeficit ? (
+                        <span className="font-mono text-xs px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-semibold">
+                          -{formatNumber(mat.desiredQuantity - mat.currentStock)}
+                        </span>
+                      ) : (
+                        <span className="font-mono text-xs px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700">
+                          +OK
+                        </span>
+                      )}
+                      {hasOrderDemand && (
+                        <span
+                          className="font-mono text-xs px-2 py-0.5 rounded bg-orange-50 border border-orange-200 text-orange-700 font-semibold"
+                          title="Shortfall for in-progress orders, after current stock"
+                        >
+                          +{formatNumber(mat.orderMissing)} orders
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
