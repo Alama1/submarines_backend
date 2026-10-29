@@ -16,7 +16,6 @@ import { InventoryService } from './inventory.service';
 import { IngestDto } from './dto/ingest.dto';
 import { UpdateStockDto } from './dto/update-stock.dto';
 import { UpdateTargetDto } from './dto/update-target.dto';
-import { CreateClaimDto } from './dto/create-claim.dto';
 
 @Controller('inventory')
 export class InventoryController {
@@ -57,11 +56,6 @@ export class InventoryController {
     return this.svc.findRepairs(search, p, l);
   }
 
-  @Get('claims')
-  findAllClaims() {
-    return this.svc.findAllClaims();
-  }
-
   @Get('net-worth')
   @UseInterceptors(CacheInterceptor)
   @CacheTTL(30)
@@ -94,23 +88,6 @@ export class InventoryController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.svc.findOne(id);
-  }
-
-  @Get(':id/claims')
-  findClaims(@Param('id') id: string) {
-    return this.svc.findClaims(id);
-  }
-
-  @Post(':id/claims')
-  @HttpCode(HttpStatus.CREATED)
-  createClaim(@Param('id') id: string, @Body() dto: CreateClaimDto) {
-    return this.svc.createClaim(id, dto);
-  }
-
-  @Delete('claims/:claimId')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  deleteClaim(@Param('claimId') claimId: string): Promise<void> {
-    return this.svc.deleteClaim(claimId);
   }
 
   @Post('ingest')

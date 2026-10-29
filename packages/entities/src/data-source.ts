@@ -5,7 +5,8 @@ import * as dotenv from 'dotenv';
 import { BaseMaterial } from './base-material.entity';
 import { PartMaterial } from './part-material.entity';
 import { SubmarinePart } from './submarine-part.entity';
-import { MaterialClaim } from './material-claim.entity';
+import { CraftClaim } from './craft-claim.entity';
+import { CraftClaimItem } from './craft-claim-item.entity';
 import { CharacterInventory } from './character-inventory.entity';
 import { RetainerInventory } from './retainer-inventory.entity';
 import { MaterialIngredient } from './material-ingredient.entity';
@@ -33,7 +34,7 @@ export const AppDataSource = new DataSource({
   database: process.env.POSTGRES_DB ?? 'ff14_db',
   username: process.env.POSTGRES_USER ?? 'ff14',
   password,
-  entities: [BaseMaterial, PartMaterial, SubmarinePart, MaterialClaim, CharacterInventory, RetainerInventory, MaterialIngredient, AppSetting, Order, OrderItem, BulkDiscount, CrafterBulkDiscount, DiscountCode, PartSet, PartSetItem],
+  entities: [BaseMaterial, PartMaterial, SubmarinePart, CraftClaim, CraftClaimItem, CharacterInventory, RetainerInventory, MaterialIngredient, AppSetting, Order, OrderItem, BulkDiscount, CrafterBulkDiscount, DiscountCode, PartSet, PartSetItem],
   migrations: ['src/migrations/*.ts'],
   namingStrategy: new SnakeNamingStrategy(),
   synchronize: false,

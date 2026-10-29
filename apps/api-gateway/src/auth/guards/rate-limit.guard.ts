@@ -9,13 +9,18 @@ const WINDOW_MS = 60_000;
 
 const RULES: Array<{ test: (method: string, url: string) => boolean; limit: number }> = [
   {
-    test: (method, url) => method === 'POST' && (url === '/api/orders' || url === '/orders'),
+    test: (method, url) =>
+      method === 'POST' &&
+      (url === '/api/orders' || url === '/orders' || url === '/api/inventory/claims' || url === '/inventory/claims'),
     limit: 10,
   },
   {
     test: (method, url) =>
       method === 'GET' &&
-      (url.startsWith('/api/orders/lookup/') || url.startsWith('/orders/lookup/')),
+      (url.startsWith('/api/orders/lookup/') ||
+        url.startsWith('/orders/lookup/') ||
+        url.startsWith('/api/inventory/claims/lookup/') ||
+        url.startsWith('/inventory/claims/lookup/')),
     limit: 60,
   },
 ];

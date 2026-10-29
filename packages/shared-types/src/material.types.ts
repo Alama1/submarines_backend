@@ -144,37 +144,56 @@ export interface NetWorthResponse {
   unpricedCount: number;
 }
 
-export interface MaterialClaim {
+export type CraftClaimStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled';
+
+export const CRAFT_CLAIM_STATUSES: CraftClaimStatus[] = [
+  'pending',
+  'confirmed',
+  'completed',
+  'cancelled',
+];
+
+export interface CraftClaimItem {
+  id: number;
+  materialId: string | null;
+  materialName: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export interface CraftClaim {
   id: string;
+  claimCode: string;
+  nickname: string;
+  status: CraftClaimStatus;
+  subtotal: number;
+  bonusPct: number;
+  bonusAmount: number;
+  total: number;
+  confirmedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items: CraftClaimItem[];
+}
+
+export interface CreateCraftClaimItemDto {
   materialId: string;
+  quantity: number;
+}
+
+export interface CreateCraftClaimDto {
+  nickname: string;
+  items: CreateCraftClaimItemDto[];
+}
+
+/** A single material entry in the public missing-materials feed (from active claims). */
+export interface MaterialClaim {
+  id: number;
   claimedFor: string;
   quantity: number;
   createdAt: string;
-}
-
-export interface MaterialClaimOverview extends MaterialClaim {
-  materialName: string;
-  currentStock: number;
-  desiredQuantity: number;
-  deficit: number;
-}
-
-export interface AllClaimsResponse {
-  items: MaterialClaimOverview[];
-  total: number;
-}
-
-export interface CreateMaterialClaimDto {
-  claimedFor: string;
-  quantity: number;
-}
-
-export interface MaterialClaimsResponse {
-  material: Pick<BaseMaterial, 'id' | 'name' | 'currentStock' | 'desiredQuantity'>;
-  deficit: number;
-  totalClaimed: number;
-  remaining: number;
-  claims: MaterialClaim[];
 }
 
 export interface MissingMaterialItem {

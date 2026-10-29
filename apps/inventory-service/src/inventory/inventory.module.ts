@@ -5,21 +5,25 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import {
   BaseMaterial,
   CharacterInventory,
-  MaterialClaim,
+  CraftClaim,
+  CrafterBulkDiscount,
   RetainerInventory,
   SubmarinePart,
 } from '@ff14/entities';
 import { InventoryController } from './inventory.controller';
 import { InventoryService } from './inventory.service';
+import { ClaimsController } from './claims.controller';
+import { ClaimsService } from './claims.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       BaseMaterial,
-      MaterialClaim,
+      CraftClaim,
       SubmarinePart,
       CharacterInventory,
       RetainerInventory,
+      CrafterBulkDiscount,
     ]),
     ClientsModule.registerAsync([
       {
@@ -39,8 +43,8 @@ import { InventoryService } from './inventory.service';
       },
     ]),
   ],
-  controllers: [InventoryController],
-  providers: [InventoryService],
+  controllers: [ClaimsController, InventoryController],
+  providers: [ClaimsService, InventoryService],
   exports: [InventoryService],
 })
 export class InventoryModule {}

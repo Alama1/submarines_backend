@@ -1,11 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { In } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   BaseMaterial,
   CharacterInventory,
-  MaterialClaim,
+  CraftClaim,
   RetainerInventory,
   SubmarinePart,
 } from '@ff14/entities';
@@ -20,11 +21,7 @@ describe('InventoryService — claims', () => {
     save: jest.Mock;
   };
   let claimRepo: {
-    findOne: jest.Mock;
     find: jest.Mock;
-    create: jest.Mock;
-    save: jest.Mock;
-    remove: jest.Mock;
   };
   let charInvRepo: {
     findOne: jest.Mock;
@@ -52,14 +49,18 @@ describe('InventoryService — claims', () => {
     updatedAt: new Date(),
   } as BaseMaterial;
 
-  const claim = (id: string, quantity: number, claimedFor: string) =>
+  const claim = (
+    id: string,
+    nickname: string,
+    items: Array<{ materialId: string; quantity: number }>,
+  ) =>
     ({
       id,
-      materialId: 'mat-1',
-      claimedFor,
-      quantity,
+      nickname,
+      status: 'confirmed',
       createdAt: new Date(),
-    }) as MaterialClaim;
+      items,
+    }) as CraftClaim;
 
   beforeEach(async () => {
     process.env.INTERNAL_TOKEN = 'test-internal-token';
@@ -71,11 +72,7 @@ describe('InventoryService — claims', () => {
       save: jest.fn(),
     };
     claimRepo = {
-      findOne: jest.fn(),
       find: jest.fn(),
-      create: jest.fn((x) => x),
-      save: jest.fn(async (x) => ({ ...x, id: 'claim-new' })),
-      remove: jest.fn(),
     };
     charInvRepo = {
       findOne: jest.fn(),
@@ -96,7 +93,7 @@ describe('InventoryService — claims', () => {
       providers: [
         InventoryService,
         { provide: getRepositoryToken(BaseMaterial), useValue: matRepo },
-        { provide: getRepositoryToken(MaterialClaim), useValue: claimRepo },
+        { provide: getRepositoryToken(CraftClaim), useValue: claimRepo },
         { provide: getRepositoryToken(CharacterInventory), useValue: charInvRepo },
         { provide: getRepositoryToken(RetainerInventory), useValue: retainerInvRepo },
         { provide: CACHE_MANAGER, useValue: { reset: jest.fn() } },
@@ -132,8 +129,8 @@ describe('InventoryService — claims', () => {
       const qb = makeQb([material]);
       matRepo.createQueryBuilder.mockReturnValue(qb);
       claimRepo.find.mockResolvedValue([
-        claim('c1', 3000, 'Alice'),
-        claim('c2', 2000, 'Bob'),
+        claim('c1', 'Alice', [{ materialId: 'mat-1', quantity: 3000 }]),
+        claim('c2', 'Bob', [{ materialId: 'mat-1', quantity: 2000 }]),
       ]);
 
       const result = await svc.findMissing(undefined, 1, 50);
@@ -151,10 +148,26 @@ describe('InventoryService — claims', () => {
       expect(result.items[0].claims).toHaveLength(2);
     });
 
+    it('only counts confirmed and completed claims', async () => {
+      const qb = makeQb([material]);
+      matRepo.createQueryBuilder.mockReturnValue(qb);
+      claimRepo.find.mockResolvedValue([]);
+
+      await svc.findMissing(undefined, 1, 50);
+
+      expect(claimRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { status: In(['confirmed', 'completed']) },
+        }),
+      );
+    });
+
     it('never reports a negative remainder when claims exceed the deficit', async () => {
       const qb = makeQb([material]);
       matRepo.createQueryBuilder.mockReturnValue(qb);
-      claimRepo.find.mockResolvedValue([claim('c1', 12000, 'Alice')]);
+      claimRepo.find.mockResolvedValue([
+        claim('c1', 'Alice', [{ materialId: 'mat-1', quantity: 12000 }]),
+      ]);
 
       const result = await svc.findMissing(undefined, 1, 50);
 
@@ -202,7 +215,9 @@ describe('InventoryService — claims', () => {
     it('adds in-progress order demand on top of the stock-target deficit', async () => {
       const qb = makeQb([{ ...material, currentStock: 6000 }]);
       matRepo.createQueryBuilder.mockReturnValue(qb);
-      claimRepo.find.mockResolvedValue([claim('c1', 2000, 'Alice')]);
+      claimRepo.find.mockResolvedValue([
+        claim('c1', 'Alice', [{ materialId: 'mat-1', quantity: 2000 }]),
+      ]);
       process.env.ORDERS_SERVICE_URL = 'http://orders-test:3003';
       jest.spyOn(global, 'fetch').mockResolvedValue(
         orderAggregate([{ materialId: 'mat-1', needed: 30000, missing: 24000 }]),
@@ -230,13 +245,7 @@ describe('InventoryService — claims', () => {
       ]);
       matRepo.createQueryBuilder.mockReturnValue(qb);
       claimRepo.find.mockResolvedValue([
-        {
-          id: 'c1',
-          materialId: 'nails',
-          claimedFor: 'Alice',
-          quantity: 13560,
-          createdAt: new Date(),
-        } as MaterialClaim,
+        claim('c1', 'Alice', [{ materialId: 'nails', quantity: 13560 }]),
       ]);
       process.env.ORDERS_SERVICE_URL = 'http://orders-test:3003';
       jest.spyOn(global, 'fetch').mockResolvedValue(
@@ -329,78 +338,6 @@ describe('InventoryService — claims', () => {
       expect(result.total).toBe(2);
       expect(result.items).toHaveLength(1);
       expect(result.items[0].name).toBe('Iron Ore');
-    });
-  });
-
-  describe('createClaim', () => {
-    it('creates a claim for an existing material and returns the summary', async () => {
-      matRepo.findOne.mockResolvedValue(material);
-
-      const result = await svc.createClaim('mat-1', {
-        claimedFor: '  Alice  ',
-        quantity: 2500,
-      });
-
-      expect(claimRepo.create).toHaveBeenCalledWith({
-        materialId: 'mat-1',
-        claimedFor: 'Alice',
-        quantity: 2500,
-      });
-      expect(result).toMatchObject({
-        id: 'claim-new',
-        materialId: 'mat-1',
-        claimedFor: 'Alice',
-        quantity: 2500,
-      });
-    });
-
-    it('throws NotFound for an unknown material', async () => {
-      matRepo.findOne.mockResolvedValue(null);
-
-      await expect(
-        svc.createClaim('missing-id', { claimedFor: 'Alice', quantity: 1 }),
-      ).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  describe('deleteClaim', () => {
-    it('removes an existing claim', async () => {
-      claimRepo.findOne.mockResolvedValue(claim('c1', 100, 'Alice'));
-
-      await expect(svc.deleteClaim('c1')).resolves.toBeUndefined();
-      expect(claimRepo.remove).toHaveBeenCalled();
-    });
-
-    it('throws NotFound for an unknown claim', async () => {
-      claimRepo.findOne.mockResolvedValue(null);
-
-      await expect(svc.deleteClaim('nope')).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  describe('findClaims', () => {
-    it('returns the deficit summary with all claims', async () => {
-      matRepo.findOne.mockResolvedValue(material);
-      claimRepo.find.mockResolvedValue([
-        claim('c1', 3000, 'Alice'),
-        claim('c2', 2000, 'Bob'),
-      ]);
-
-      const result = await svc.findClaims('mat-1');
-
-      expect(result).toMatchObject({
-        deficit: 10000,
-        totalClaimed: 5000,
-        remaining: 5000,
-      });
-      expect(result.claims).toHaveLength(2);
-      expect(result.material.name).toBe('Cobalt Ingot');
-    });
-
-    it('throws NotFound for an unknown material', async () => {
-      matRepo.findOne.mockResolvedValue(null);
-
-      await expect(svc.findClaims('missing-id')).rejects.toThrow(NotFoundException);
     });
   });
 

@@ -1,6 +1,7 @@
 export { BaseMaterial } from './base-material.entity';
 export { MaterialSource, MaterialCategory } from './material-enums';
-export { MaterialClaim } from './material-claim.entity';
+export { CraftClaim, CraftClaimStatus } from './craft-claim.entity';
+export { CraftClaimItem } from './craft-claim-item.entity';
 export { CharacterInventory } from './character-inventory.entity';
 export { RetainerInventory } from './retainer-inventory.entity';
 export { StoredBag, StoredItem, characterKeyOf } from './inventory-cache.types';

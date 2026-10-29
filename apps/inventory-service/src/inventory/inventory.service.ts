@@ -14,8 +14,8 @@ import {
   BaseMaterial,
   characterKeyOf,
   CharacterInventory,
+  CraftClaim,
   MaterialCategory,
-  MaterialClaim,
   MaterialSource,
   RetainerInventory,
   StoredBag,
@@ -24,7 +24,6 @@ import {
 import { IngestDto, PluginBagDto, PluginRetainerDto } from './dto/ingest.dto';
 import { UpdateStockDto } from './dto/update-stock.dto';
 import { UpdateTargetDto } from './dto/update-target.dto';
-import { CreateClaimDto } from './dto/create-claim.dto';
 import { NetWorthResponse } from '@ff14/types';
 
 export interface InventoryItemStock {
@@ -40,18 +39,10 @@ export interface InventoryItemStock {
 }
 
 export interface MaterialClaimSummary {
-  id: string;
-  materialId: string;
+  id: number;
   claimedFor: string;
   quantity: number;
   createdAt: Date;
-}
-
-export interface ClaimWithMaterial extends MaterialClaimSummary {
-  materialName: string;
-  currentStock: number;
-  desiredQuantity: number;
-  deficit: number;
 }
 
 export interface MissingMaterialItem extends InventoryItemStock {
@@ -81,8 +72,8 @@ export class InventoryService {
   constructor(
     @InjectRepository(BaseMaterial)
     private readonly repo: Repository<BaseMaterial>,
-    @InjectRepository(MaterialClaim)
-    private readonly claimRepo: Repository<MaterialClaim>,
+    @InjectRepository(CraftClaim)
+    private readonly claimRepo: Repository<CraftClaim>,
     @InjectRepository(CharacterInventory)
     private readonly charInvRepo: Repository<CharacterInventory>,
     @InjectRepository(RetainerInventory)
@@ -270,21 +261,25 @@ export class InventoryService {
     const grouped = new Map<string, MaterialClaimSummary[]>();
     if (!materialIds.length) return grouped;
 
+    // Only confirmed/completed claims count towards the shopping list —
+    // pending ones have not been approved yet.
     const claims = await this.claimRepo.find({
-      where: { materialId: In(materialIds) },
+      where: { status: In(['confirmed', 'completed'] as const) },
       order: { createdAt: 'ASC' },
     });
 
     for (const claim of claims) {
-      const list = grouped.get(claim.materialId) ?? [];
-      list.push({
-        id: claim.id,
-        materialId: claim.materialId,
-        claimedFor: claim.claimedFor,
-        quantity: claim.quantity,
-        createdAt: claim.createdAt,
-      });
-      grouped.set(claim.materialId, list);
+      for (const item of claim.items) {
+        if (!item.materialId || !materialIds.includes(item.materialId)) continue;
+        const list = grouped.get(item.materialId) ?? [];
+        list.push({
+          id: item.id,
+          claimedFor: claim.nickname,
+          quantity: item.quantity,
+          createdAt: claim.createdAt,
+        });
+        grouped.set(item.materialId, list);
+      }
     }
 
     return grouped;
@@ -325,95 +320,6 @@ export class InventoryService {
     const mat = await this.repo.findOne({ where: { id } });
     if (!mat) throw new NotFoundException(`Material "${id}" not found`);
     return this.mapToStockItem(mat);
-  }
-
-  async findAllClaims(): Promise<{ items: ClaimWithMaterial[]; total: number }> {
-    const claims = await this.claimRepo.find({
-      relations: ['material'],
-      order: { createdAt: 'DESC' },
-    });
-
-    const items = claims.map((c) => {
-      const mat = c.material;
-      return {
-        id: c.id,
-        materialId: c.materialId,
-        claimedFor: c.claimedFor,
-        quantity: c.quantity,
-        createdAt: c.createdAt,
-        materialName: mat?.name ?? 'Unknown material',
-        currentStock: mat?.currentStock ?? 0,
-        desiredQuantity: mat?.desiredQuantity ?? 0,
-        deficit: mat ? Math.max(0, mat.desiredQuantity - mat.currentStock) : 0,
-      };
-    });
-
-    return { items, total: items.length };
-  }
-
-  async findClaims(materialId: string): Promise<{
-    material: Pick<InventoryItemStock, 'id' | 'name' | 'currentStock' | 'desiredQuantity'>;
-    deficit: number;
-    totalClaimed: number;
-    remaining: number;
-    claims: MaterialClaimSummary[];
-  }> {
-    const mat = await this.repo.findOne({ where: { id: materialId } });
-    if (!mat) throw new NotFoundException(`Material "${materialId}" not found`);
-
-    const claims = await this.claimRepo.find({
-      where: { materialId },
-      order: { createdAt: 'ASC' },
-    });
-
-    const deficit = Math.max(0, mat.desiredQuantity - mat.currentStock);
-    const totalClaimed = claims.reduce((sum, c) => sum + c.quantity, 0);
-
-    return {
-      material: {
-        id: mat.id,
-        name: mat.name,
-        currentStock: mat.currentStock,
-        desiredQuantity: mat.desiredQuantity,
-      },
-      deficit,
-      totalClaimed,
-      remaining: Math.max(0, deficit - totalClaimed),
-      claims: claims.map((c) => ({
-        id: c.id,
-        materialId: c.materialId,
-        claimedFor: c.claimedFor,
-        quantity: c.quantity,
-        createdAt: c.createdAt,
-      })),
-    };
-  }
-
-  async createClaim(materialId: string, dto: CreateClaimDto): Promise<MaterialClaimSummary> {
-    const mat = await this.repo.findOne({ where: { id: materialId } });
-    if (!mat) throw new NotFoundException(`Material "${materialId}" not found`);
-
-    const claim = await this.claimRepo.save(
-      this.claimRepo.create({
-        materialId,
-        claimedFor: dto.claimedFor.trim(),
-        quantity: dto.quantity,
-      }),
-    );
-
-    return {
-      id: claim.id,
-      materialId: claim.materialId,
-      claimedFor: claim.claimedFor,
-      quantity: claim.quantity,
-      createdAt: claim.createdAt,
-    };
-  }
-
-  async deleteClaim(claimId: string): Promise<void> {
-    const claim = await this.claimRepo.findOne({ where: { id: claimId } });
-    if (!claim) throw new NotFoundException(`Claim "${claimId}" not found`);
-    await this.claimRepo.remove(claim);
   }
 
   /**
