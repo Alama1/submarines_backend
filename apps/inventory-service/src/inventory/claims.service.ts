@@ -152,12 +152,12 @@ export class ClaimsService {
     return this.claimRepo.save(claim);
   }
 
-  async findAll(status?: CraftClaimStatus): Promise<{ items: CraftClaim[]; total: number }> {
+  async findAll(statuses?: CraftClaimStatus[]): Promise<{ items: CraftClaim[]; total: number }> {
     const qb = this.claimRepo
       .createQueryBuilder('c')
       .leftJoinAndSelect('c.items', 'items');
-    if (status) {
-      qb.where('c.status = :status', { status });
+    if (statuses?.length) {
+      qb.where('c.status IN (:...statuses)', { statuses });
     }
     const [items, total] = await qb
       .orderBy('c.createdAt', 'DESC')

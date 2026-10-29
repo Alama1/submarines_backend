@@ -42,7 +42,13 @@ export class ClaimsController {
 
   @Get('admin')
   findAll(@Query('status') status?: string) {
-    return this.svc.findAll(status as CraftClaimStatus | undefined);
+    const statuses = status
+      ? (status
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean) as CraftClaimStatus[])
+      : undefined;
+    return this.svc.findAll(statuses?.length ? statuses : undefined);
   }
 
   @Patch('admin/:id/confirm')

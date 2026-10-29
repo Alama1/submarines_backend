@@ -14,12 +14,15 @@ import {
 import { CRAFT_CLAIM_STATUSES, CraftClaim, CraftClaimStatus } from '@ff14/types';
 import { StatusBadge } from './StatusBadge';
 
-const STATUS_FILTERS: Array<{ value: CraftClaimStatus | 'all'; label: string }> = [
-  { value: 'all', label: 'All' },
+type StatusFilter = 'active' | CraftClaimStatus | 'all';
+
+const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
+  { value: 'active', label: 'Active' },
   { value: 'pending', label: 'Pending' },
   { value: 'confirmed', label: 'Confirmed' },
   { value: 'completed', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },
+  { value: 'all', label: 'All' },
 ];
 
 const statusSelectClass: Record<CraftClaimStatus, string> = {
@@ -32,17 +35,24 @@ const statusSelectClass: Record<CraftClaimStatus, string> = {
 /** Crafter claim requests (code-based) — confirm, re-status or cancel them here. */
 export const CraftClaimsPanel: React.FC = () => {
   const queryClient = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState<CraftClaimStatus | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const statusParam =
+    statusFilter === 'all'
+      ? ''
+      : statusFilter === 'active'
+        ? 'pending,confirmed'
+        : statusFilter;
 
   const { data, isLoading } = useQuery<{ items: CraftClaim[]; total: number }>({
     queryKey: ['craft-claims', statusFilter],
     queryFn: async () =>
       (
         await api.get(
-          statusFilter === 'all'
-            ? '/inventory/claims/admin'
-            : `/inventory/claims/admin?status=${statusFilter}`
+          statusParam
+            ? `/inventory/claims/admin?status=${statusParam}`
+            : '/inventory/claims/admin'
         )
       ).data,
   });
@@ -119,7 +129,11 @@ export const CraftClaimsPanel: React.FC = () => {
         <div className="text-center py-6 text-xs text-slate-400">Loading claims...</div>
       ) : claims.length === 0 ? (
         <div className="text-center py-6 text-xs text-slate-400">
-          No claims {statusFilter !== 'all' ? `with status "${statusFilter}"` : 'yet'}.
+          {statusFilter === 'all'
+            ? 'No claims yet.'
+            : statusFilter === 'active'
+              ? 'No active claims right now.'
+              : `No claims with status "${statusFilter}".`}
         </div>
       ) : (
         <div className="overflow-x-auto -mx-4 sm:mx-0">
