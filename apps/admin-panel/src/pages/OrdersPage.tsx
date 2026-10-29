@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { StatusBadge } from '../components/StatusBadge';
+import { TradeConfirmation } from '../components/TradeConfirmation';
 import { formatGil } from '../lib/utils';
 import { Eye, X, XCircle, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Order, OrderStatus, SubmarinePart } from '@ff14/types';
@@ -50,6 +51,9 @@ export const OrdersPage: React.FC = () => {
   const [draft, setDraft] = useState<EditOrderDraft | null>(null);
   const [promoInput, setPromoInput] = useState('');
   const [deliveryDraft, setDeliveryDraft] = useState<Record<number, number>>({});
+  // Mannequin item used in the trade confirmation message — kept at page level
+  // so it persists between opening different orders.
+  const [mannequinItem, setMannequinItem] = useState('');
 
   const { data, isLoading } = useQuery<{ items: Order[]; total: number }>({
     queryKey: ['orders', statusFilter],
@@ -639,6 +643,15 @@ export const OrdersPage: React.FC = () => {
               </div>
             </div>
 
+            {/* Trade confirmation message — mannequin handover agreement */}
+            {(modalOrder.items ?? []).length > 0 && (
+              <TradeConfirmation
+                order={modalOrder}
+                mannequinItem={mannequinItem}
+                onMannequinItemChange={setMannequinItem}
+              />
+            )}
+
             {/* Promo code control */}
             {canEditPromo(modalOrder.status) && (
               <div className="space-y-2">
@@ -758,7 +771,7 @@ export const OrdersPage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="space-y-1">
                 <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                  Client Name
+                  Discord Name
                 </span>
                 <input
                   type="text"
@@ -769,11 +782,11 @@ export const OrdersPage: React.FC = () => {
               </label>
               <label className="space-y-1">
                 <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                  Contact Info
+                  Character Name
                 </span>
                 <input
                   type="text"
-                  placeholder="Discord / character"
+                  placeholder="e.g. Alamai Character"
                   value={draft.contactInfo}
                   onChange={(e) => setDraft({ ...draft, contactInfo: e.target.value })}
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500"
