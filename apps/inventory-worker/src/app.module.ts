@@ -2,7 +2,6 @@ import { join } from 'node:path';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { CacheModule } from '@nestjs/cache-manager';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { BaseMaterial, CharacterInventory, MaterialIngredient, PartMaterial, RetainerInventory, SubmarinePart } from '@ff14/entities';
 import { ConsumersModule } from './consumers/consumers.module';
@@ -34,13 +33,6 @@ import { ConsumersModule } from './consumers/consumers.module';
           logging: process.env.NODE_ENV !== 'production',
         };
       },
-    }),
-
-    CacheModule.registerAsync({
-      isGlobal: true,
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: async () => ({ ttl: 30 }),
     }),
 
     ConsumersModule,

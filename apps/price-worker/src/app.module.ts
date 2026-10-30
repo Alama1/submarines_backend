@@ -3,7 +3,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
-import { CacheModule } from '@nestjs/cache-manager';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { AppSetting, BaseMaterial, MaterialIngredient, PartMaterial, SubmarinePart } from '@ff14/entities';
 import { UniversalisModule } from './universalis/universalis.module';
@@ -37,13 +36,6 @@ import { JobsModule } from './jobs/jobs.module';
           logging: process.env.NODE_ENV !== 'production',
         };
       },
-    }),
-
-    CacheModule.registerAsync({
-      isGlobal: true,
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: async () => ({ ttl: 300 }),
     }),
 
     UniversalisModule,

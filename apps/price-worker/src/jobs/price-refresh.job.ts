@@ -1,10 +1,8 @@
-﻿import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+﻿import { Injectable, Logger } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MessagePattern, Payload } from '@nestjs/microservices';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Cache } from 'cache-manager';
 import { AppSetting, BaseMaterial } from '@ff14/entities';
 import { UNIVERSALIS_WORLD_KEY } from '@ff14/types';
 import { readEnvelope } from '@ff14/internal-auth';
@@ -21,7 +19,6 @@ export class PriceRefreshJob {
     @InjectRepository(AppSetting)
     private readonly settingRepo: Repository<AppSetting>,
     private readonly universalis: UniversalisClient,
-    @Optional() @Inject(CACHE_MANAGER) private readonly cache?: Cache,
   ) {}
 
   /** Hourly Universalis sync (top of every hour). */
@@ -99,15 +96,9 @@ export class PriceRefreshJob {
         }
       }
 
+      // shortcut: the worker cannot clear prices-service's own response cache
+      // (different process); cached prices stay stale up to its 300 s TTL.
       this.logger.log(`Universalis price refresh complete. Updated ${updatedCount} material prices.`);
-
-      if (this.cache) {
-        try {
-          await this.cache.reset();
-        } catch (cacheErr: unknown) {
-          this.logger.warn(`Failed to clear cache: ${(cacheErr as Error).message}`);
-        }
-      }
     } catch (err: unknown) {
       this.logger.error(`Error during Universalis price refresh: ${(err as Error).message}`, (err as Error).stack);
     } finally {

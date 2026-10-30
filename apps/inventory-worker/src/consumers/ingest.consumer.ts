@@ -1,9 +1,7 @@
-﻿import { Controller, Inject, Logger, Optional } from '@nestjs/common';
+﻿import { Controller, Logger } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Cache } from 'cache-manager';
 import {
   BaseMaterial,
   CharacterInventory,
@@ -54,7 +52,6 @@ export class IngestConsumer {
     private readonly charInvRepo: Repository<CharacterInventory>,
     @InjectRepository(RetainerInventory)
     private readonly retainerInvRepo: Repository<RetainerInventory>,
-    @Optional() @Inject(CACHE_MANAGER) private readonly cache?: Cache,
   ) {}
 
   /**
@@ -186,17 +183,11 @@ export class IngestConsumer {
       partsToSave.length ? this.partRepo.save(partsToSave)     : Promise.resolve(),
     ]);
 
+    // shortcut: the worker cannot clear inventory-service's own response cache
+    // (different process); cached stock views stay stale up to its 30 s TTL.
     this.logger.log(
       `Inventory ingest complete. ` +
       `Updated ${matsToSave.length} material(s) and ${partsToSave.length} part(s).`,
     );
-
-    if (this.cache) {
-      try {
-        await this.cache.reset();
-      } catch (err: unknown) {
-        this.logger.warn(`Failed to reset cache: ${(err as Error).message}`);
-      }
-    }
   }
 }
