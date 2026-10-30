@@ -29,4 +29,5 @@ export {
   effectivePriceOf,
   MaterialCostInfo,
 } from './compute-craft-costs';
+export { generateReadableCode } from './readable-code';
 
