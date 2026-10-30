@@ -43,6 +43,24 @@ export const DashboardPage: React.FC = () => {
     queryFn: async () => (await api.get('/inventory/missing?limit=5')).data,
   });
 
+  // Full missing list — used to show which materials crafters have claimed.
+  // shortcut: capped at the endpoint's 200-row page size; if the catalogue
+  // ever exceeds that, move the claim info into the orders aggregate instead.
+  const { data: missingAll } = useQuery({
+    queryKey: ['inventory', 'missing', 'claims'],
+    queryFn: async () => (await api.get('/inventory/missing?limit=200')).data,
+  });
+  const claimsById = React.useMemo(() => {
+    const map = new Map<string, { claimed: number; by: string }>();
+    for (const item of missingAll?.items ?? []) {
+      const claimed = item.claimed ?? 0;
+      if (claimed <= 0) continue;
+      const by = [...new Set((item.claims ?? []).map((c: any) => c.claimedFor))].join(', ');
+      map.set(item.id, { claimed, by });
+    }
+    return map;
+  }, [missingAll]);
+
   const orders = inProgressData?.orders ?? [];
   const aggregate = inProgressData?.aggregate;
   const aggregateMaterials = aggregate?.materials ?? [];
@@ -505,7 +523,10 @@ export const DashboardPage: React.FC = () => {
           </div>
 
           <div className="divide-y divide-slate-100">
-            {aggregateMaterials.map((mat) => (
+            {aggregateMaterials.map((mat) => {
+              const claim = claimsById.get(mat.materialId);
+              const unclaimed = mat.missing > 0 ? Math.max(0, mat.missing - (claim?.claimed ?? 0)) : 0;
+              return (
               <div
                 key={mat.materialId}
                 className={`py-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-xs ${
@@ -537,9 +558,29 @@ export const DashboardPage: React.FC = () => {
                     {' · '}have <strong className="text-slate-800">{formatNumber(mat.available)}</strong>
                   </span>
                   {mat.missing > 0 ? (
-                    <span className="font-mono px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-bold whitespace-nowrap">
-                      Missing: -{formatNumber(mat.missing)}
-                    </span>
+                    <>
+                      <span className="font-mono px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-bold whitespace-nowrap">
+                        Missing: -{formatNumber(mat.missing)}
+                      </span>
+                      {claim ? (
+                        <span
+                          className="font-mono px-2 py-0.5 rounded bg-violet-50 border border-violet-200 text-violet-700 font-bold whitespace-nowrap"
+                          title={
+                            unclaimed > 0
+                              ? `Claimed for craft by ${claim.by} — ${formatNumber(unclaimed)} still unclaimed`
+                              : `Fully claimed for craft by ${claim.by}`
+                          }
+                        >
+                          <Hammer className="inline w-3 h-3 mr-1 -mt-0.5" />
+                          {formatNumber(claim.claimed)} claimed
+                          {unclaimed > 0 ? ` · ${formatNumber(unclaimed)} needed` : ''}
+                        </span>
+                      ) : (
+                        <span className="font-mono px-2 py-0.5 rounded bg-slate-50 border border-slate-200 text-slate-500 font-bold whitespace-nowrap">
+                          unclaimed
+                        </span>
+                      )}
+                    </>
                   ) : (
                     <span className="font-mono px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold whitespace-nowrap">
                       Covered
@@ -547,7 +588,8 @@ export const DashboardPage: React.FC = () => {
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -588,6 +630,15 @@ export const DashboardPage: React.FC = () => {
                 <span className="font-mono px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-bold whitespace-nowrap">
                   Deficit: -{formatNumber(mat.deficit)}
                 </span>
+                {claimsById.get(mat.id) && (
+                  <span
+                    className="font-mono px-2 py-0.5 rounded bg-violet-50 border border-violet-200 text-violet-700 font-bold whitespace-nowrap"
+                    title={`Claimed for craft by ${claimsById.get(mat.id)!.by}`}
+                  >
+                    <Hammer className="inline w-3 h-3 mr-1 -mt-0.5" />
+                    {formatNumber(claimsById.get(mat.id)!.claimed)} claimed
+                  </span>
+                )}
               </div>
             </div>
           ))}
