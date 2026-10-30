@@ -61,6 +61,9 @@ export class ProxyService {
         method,
         headers,
         body,
+        // A hung service must not pin gateway requests open forever; the
+        // abort lands in the catch below and surfaces as a 502.
+        signal: AbortSignal.timeout(30_000),
       });
 
       const contentType = response.headers.get('content-type') || 'application/json';
