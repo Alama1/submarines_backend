@@ -8,6 +8,7 @@ describe('ClaimsService', () => {
   let svc: ClaimsService;
   let claimRepo: {
     findOne: jest.Mock;
+    exist: jest.Mock;
     find: jest.Mock;
     create: jest.Mock;
     save: jest.Mock;
@@ -29,6 +30,7 @@ describe('ClaimsService', () => {
   beforeEach(async () => {
     claimRepo = {
       findOne: jest.fn(),
+      exist: jest.fn().mockResolvedValue(false),
       find: jest.fn(),
       create: jest.fn((x) => x),
       save: jest.fn(async (x) => ({ ...x, id: x.id ?? 'claim-new' })),

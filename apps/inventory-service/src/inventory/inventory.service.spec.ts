@@ -148,7 +148,7 @@ describe('InventoryService — claims', () => {
       expect(result.items[0].claims).toHaveLength(2);
     });
 
-    it('only counts confirmed and completed claims', async () => {
+    it('only counts confirmed claims (completed ones already landed in stock)', async () => {
       const qb = makeQb([material]);
       matRepo.createQueryBuilder.mockReturnValue(qb);
       claimRepo.find.mockResolvedValue([]);
@@ -157,7 +157,7 @@ describe('InventoryService — claims', () => {
 
       expect(claimRepo.find).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { status: In(['confirmed', 'completed']) },
+          where: { status: In(['confirmed']) },
         }),
       );
     });

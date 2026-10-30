@@ -15,6 +15,7 @@ import {
   characterKeyOf,
   CharacterInventory,
   CraftClaim,
+  effectivePriceOf,
   MaterialCategory,
   MaterialSource,
   RetainerInventory,
@@ -261,10 +262,11 @@ export class InventoryService {
     const grouped = new Map<string, MaterialClaimSummary[]>();
     if (!materialIds.length) return grouped;
 
-    // Only confirmed/completed claims count towards the shopping list —
-    // pending ones have not been approved yet.
+    // Only confirmed claims count towards the shopping list: pending ones are
+    // not approved yet, and completed ones already landed in currentStock —
+    // counting them again would suppress the list forever.
     const claims = await this.claimRepo.find({
-      where: { status: In(['confirmed', 'completed'] as const) },
+      where: { status: In(['confirmed'] as const) },
       order: { createdAt: 'ASC' },
     });
 
@@ -285,10 +287,6 @@ export class InventoryService {
     return grouped;
   }
 
-  private effectivePriceOf(mat: BaseMaterial): number {
-    return mat.myPrice ?? mat.marketPrice ?? mat.npcPrice ?? 0;
-  }
-
   /**
    * Net worth of all stock on hand, valued two ways:
    *  - marketNetWorth: universalis market price per unit (unpriced -> 0)
@@ -303,9 +301,9 @@ export class InventoryService {
 
     for (const mat of materials) {
       if (mat.currentStock <= 0) continue;
-      if (this.effectivePriceOf(mat) === 0) unpricedCount++;
+      if (effectivePriceOf(mat) === 0) unpricedCount++;
       marketNetWorth += mat.currentStock * (mat.marketPrice ?? 0);
-      myNetWorth += mat.currentStock * this.effectivePriceOf(mat);
+      myNetWorth += mat.currentStock * effectivePriceOf(mat);
     }
 
     return {

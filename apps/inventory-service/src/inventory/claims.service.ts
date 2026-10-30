@@ -5,13 +5,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import * as crypto from 'crypto';
 import { In, Repository } from 'typeorm';
 import {
   BaseMaterial,
   CraftClaim,
   CraftClaimStatus,
   CrafterBulkDiscount,
+  effectivePriceOf,
+  generateReadableCode,
 } from '@ff14/entities';
 import { CreateCraftClaimDto } from './dto/create-craft-claim.dto';
 import { UpdateClaimStatusDto } from './dto/update-claim-status.dto';
@@ -19,12 +20,6 @@ import { UpdateClaimStatusDto } from './dto/update-claim-status.dto';
 @Injectable()
 export class ClaimsService {
   private readonly logger = new Logger(ClaimsService.name);
-
-  /** Only active claims reduce the "remaining" figure on the shopping list. */
-  private static readonly COUNTED_STATUSES: CraftClaimStatus[] = [
-    'confirmed',
-    'completed',
-  ];
 
   /** Statuses a crafter may still cancel themselves. */
   private static readonly USER_CANCELLABLE: CraftClaimStatus[] = [
@@ -40,27 +35,6 @@ export class ClaimsService {
     @InjectRepository(CrafterBulkDiscount)
     private readonly bonusRepo: Repository<CrafterBulkDiscount>,
   ) {}
-
-  private async generateUniqueClaimCode(): Promise<string> {
-    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // Excludes confusing characters 0/O, 1/I
-    const group = (): string => {
-      const bytes = crypto.randomBytes(4);
-      let out = '';
-      for (let i = 0; i < 4; i++) {
-        out += chars[bytes[i] % chars.length];
-      }
-      return out;
-    };
-
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const code = `CLM-${group()}-${group()}-${group()}`;
-      const existing = await this.claimRepo.findOne({ where: { claimCode: code } });
-      if (!existing) {
-        return code;
-      }
-    }
-    return `CLM-${Date.now().toString(36).toUpperCase()}`;
-  }
 
   private async resolveBonusPct(totalUnits: number): Promise<number> {
     const tiers = await this.bonusRepo.find();
@@ -90,7 +64,7 @@ export class ClaimsService {
 
     const priced = [...quantities.entries()].map(([materialId, quantity]) => {
       const mat = materialById.get(materialId)!;
-      const unitPrice = mat.myPrice ?? mat.marketPrice ?? mat.npcPrice ?? 0;
+      const unitPrice = effectivePriceOf(mat);
       return {
         materialId,
         materialName: mat.name,
@@ -107,7 +81,9 @@ export class ClaimsService {
 
     return this.claimRepo.save(
       this.claimRepo.create({
-        claimCode: await this.generateUniqueClaimCode(),
+        claimCode: await generateReadableCode('CLM', 3, (code) =>
+          this.claimRepo.exist({ where: { claimCode: code } }),
+        ),
         nickname: dto.nickname.trim(),
         status: 'pending',
         subtotal,
