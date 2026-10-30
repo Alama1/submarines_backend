@@ -2,6 +2,7 @@ import { OrdersService } from './orders.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import {
   BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   BaseMaterial,
@@ -60,7 +61,7 @@ describe('OrdersService — computeMissingMaterials', () => {
     }
     const expanded: Map<string, ExpandedMaterialRequirement[]> =
       expandAllPartMaterials(allParts);
-    return (svc as any).computeMissingMaterials(
+    const result = (svc as any).computeMissingMaterials(
       o,
       partsById,
       partsByName,
@@ -69,7 +70,38 @@ describe('OrdersService — computeMissingMaterials', () => {
       availableStock,
       effStock,
     );
+    return result.missing;
   };
+
+  // Two orders share one retainer hull: only the first may count it as stock.
+  it('consumes retainer part stock across orders instead of double-counting it', () => {
+    const iron = mat('iron', 'Iron Ore', 0);
+    const hull = part('shark_hull', 'Shark Hull', 1, [
+      { material: iron, quantity: 5 },
+    ]);
+    const partsById = new Map([['shark_hull', hull]]);
+    const partsByName = new Map([['shark hull', hull]]);
+    const matById = new Map([['iron', iron]]);
+    const expanded = expandAllPartMaterials([hull]);
+    const partStockLeft = new Map([['shark_hull', 1]]);
+    const availableStock = new Map<string, number>();
+    const mkOrder = () =>
+      ({ items: [{ part: hull, quantity: 1, deliveredQuantity: 0 }] }) as any;
+
+    const first = (svc as any).computeMissingMaterials(
+      mkOrder(), partsById, partsByName, matById, expanded, availableStock, partStockLeft,
+    );
+    const second = (svc as any).computeMissingMaterials(
+      mkOrder(), partsById, partsByName, matById, expanded, availableStock, partStockLeft,
+    );
+
+    expect(first.demandByPart.size).toBe(0);
+    expect(first.missing).toEqual([]);
+    expect(second.demandByPart.get('shark_hull')).toBe(1);
+    expect(second.missing).toEqual([
+      expect.objectContaining({ materialId: 'iron', needed: 5, missing: 5 }),
+    ]);
+  });
 
   it('lists raw material shortages for the parts still to craft', () => {
     const iron = mat('iron', 'Iron Ore', 4);
@@ -227,14 +259,29 @@ describe('OrdersService — computeAggregate', () => {
     }
     const expanded: Map<string, ExpandedMaterialRequirement[]> =
       expandAllPartMaterials(allParts);
-    return (svc as any).computeAggregate(
-      orders,
-      partsById,
-      partsByName,
-      matById,
-      expanded,
-      effStock,
-    );
+    // Same two-pass pipeline findInProgress uses: per-order demand with
+    // shared part-stock consumption, then aggregate the collected demand.
+    const partStockLeft = new Map(effStock);
+    const demandByPart = new Map<string, number>();
+    const coveredByPart = new Map<string, number>();
+    for (const o of orders) {
+      const d = (svc as any).computeMissingMaterials(
+        o,
+        partsById,
+        partsByName,
+        matById,
+        expanded,
+        new Map<string, number>(),
+        partStockLeft,
+      );
+      for (const [id, qty] of d.demandByPart) {
+        demandByPart.set(id, (demandByPart.get(id) ?? 0) + qty);
+      }
+      for (const [id, qty] of d.coveredByPart) {
+        coveredByPart.set(id, (coveredByPart.get(id) ?? 0) + qty);
+      }
+    }
+    return (svc as any).computeAggregate(demandByPart, coveredByPart, matById, expanded);
   };
 
   it('sums requirements across orders and reports the shortfall vs stock', () => {
@@ -660,5 +707,204 @@ describe('OrdersService — buildPricingPlan (promo vs bulk, no stacking)', () =
       total: 1500,
       discountSource: 'bulk',
     });
+  });
+});
+
+const makeFlowService = (order: any, promoCodes: any = {}) => {
+  const em = {
+    save: jest.fn(async (x: any) => x),
+    create: (_c: any, d: any) => d,
+    delete: jest.fn().mockResolvedValue({}),
+  };
+  const ds = { transaction: jest.fn((cb: any) => cb(em)) };
+  const orderRepo = {
+    findOne: jest.fn().mockResolvedValue(order),
+    save: jest.fn(async (x: any) => x),
+  };
+  const svc = new OrdersService(
+    orderRepo as any,
+    {} as any,
+    {} as any,
+    ds as any,
+    promoCodes as any,
+  );
+  return { svc, em, orderRepo };
+};
+
+const flowOrder = (over: any = {}) => ({
+  id: 'o1',
+  orderCode: 'SUB-1',
+  status: 'in_progress',
+  promoCodeId: null,
+  discountSource: 'bulk',
+  items: [
+    { id: 1, part: { id: 'hull' }, partName: 'Hull', quantity: 2, deliveredQuantity: 0, buildName: null },
+  ],
+  ...over,
+});
+
+describe('OrdersService — recordDelivery', () => {
+  it('refuses deliveries on orders that are not active', async () => {
+    const { svc } = makeFlowService(flowOrder({ status: 'pending' }));
+    await expect(
+      svc.recordDelivery('o1', { items: [{ itemId: 1, deliveredQuantity: 1 }] }),
+    ).rejects.toThrow(/deliveries can only be recorded/i);
+  });
+
+  it('rejects item lines that belong to another order', async () => {
+    const { svc } = makeFlowService(flowOrder());
+    await expect(
+      svc.recordDelivery('o1', { items: [{ itemId: 99, deliveredQuantity: 1 }] }),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('rejects over-delivery beyond the ordered quantity', async () => {
+    const { svc } = makeFlowService(flowOrder());
+    await expect(
+      svc.recordDelivery('o1', { items: [{ itemId: 1, deliveredQuantity: 5 }] }),
+    ).rejects.toThrow(/only 2 were ordered/);
+  });
+
+  it('stores a partial delivery and keeps the order open', async () => {
+    const order = flowOrder();
+    const { svc } = makeFlowService(order);
+    await svc.recordDelivery('o1', { items: [{ itemId: 1, deliveredQuantity: 1 }] });
+    expect(order.items[0].deliveredQuantity).toBe(1);
+    expect(order.status).toBe('in_progress');
+  });
+
+  it('auto-fulfils once every item is fully delivered', async () => {
+    const order = flowOrder();
+    const { svc } = makeFlowService(order);
+    await svc.recordDelivery('o1', { items: [{ itemId: 1, deliveredQuantity: 2 }] });
+    expect(order.status).toBe('fulfilled');
+  });
+
+  it('corrects the record when a smaller quantity is re-sent', async () => {
+    const order = flowOrder({
+      items: [{ id: 1, part: { id: 'hull' }, partName: 'Hull', quantity: 2, deliveredQuantity: 2, buildName: null }],
+    });
+    const { svc } = makeFlowService(order);
+    await svc.recordDelivery('o1', { items: [{ itemId: 1, deliveredQuantity: 1 }] });
+    expect(order.items[0].deliveredQuantity).toBe(1);
+  });
+});
+
+describe('OrdersService — confirm', () => {
+  it('refuses to confirm an order that is not pending', async () => {
+    const { svc } = makeFlowService(flowOrder({ status: 'confirmed' }));
+    await expect(svc.confirmById('o1')).rejects.toThrow(/can only confirm pending orders/);
+  });
+
+  it('activates a pending order and stamps confirmedAt', async () => {
+    const order = flowOrder({ status: 'pending', confirmedAt: null });
+    const { svc } = makeFlowService(order);
+    await svc.confirmById('o1');
+    expect(order.status).toBe('confirmed');
+    expect(order.confirmedAt).toBeInstanceOf(Date);
+  });
+});
+
+describe('OrdersService — cancel', () => {
+  it('refuses to cancel an order that is already finished', async () => {
+    const { svc } = makeFlowService(flowOrder({ status: 'finished' }));
+    await expect(svc.cancel('o1')).rejects.toThrow(/only pending or confirmed orders/i);
+  });
+
+  it('releases the consumed promo use', async () => {
+    const order = flowOrder({
+      status: 'confirmed',
+      discountSource: 'promo',
+      promoCodeId: 'p1',
+    });
+    const releaseTx = jest.fn();
+    const { svc, em } = makeFlowService(order, { releaseTx });
+    await svc.cancel('o1');
+    expect(order.status).toBe('cancelled');
+    expect(releaseTx).toHaveBeenCalledWith(em, 'p1');
+  });
+
+  it('releases nothing when the order used the bulk discount', async () => {
+    const order = flowOrder({ status: 'confirmed', promoCodeId: 'p1' });
+    const releaseTx = jest.fn();
+    const { svc } = makeFlowService(order, { releaseTx });
+    await svc.cancel('o1');
+    expect(releaseTx).not.toHaveBeenCalled();
+  });
+});
+
+describe('OrdersService — updateStatus (status dropdown)', () => {
+  it('cancelling via the dropdown releases the promo like cancel() does', async () => {
+    const order = flowOrder({ discountSource: 'promo', promoCodeId: 'p1' });
+    const releaseTx = jest.fn();
+    const { svc, em } = makeFlowService(order, { releaseTx });
+    await svc.updateStatus('o1', { status: 'cancelled' });
+    expect(order.status).toBe('cancelled');
+    expect(releaseTx).toHaveBeenCalledWith(em, 'p1');
+  });
+
+  it('does not release the promo twice when cancelling an already-cancelled order', async () => {
+    const order = flowOrder({ status: 'cancelled', discountSource: 'promo', promoCodeId: 'p1' });
+    const releaseTx = jest.fn();
+    const { svc } = makeFlowService(order, { releaseTx });
+    await svc.updateStatus('o1', { status: 'cancelled' });
+    expect(releaseTx).not.toHaveBeenCalled();
+  });
+
+  it('marking fulfilled via the dropdown counts as a full delivery', async () => {
+    const order = flowOrder();
+    const { svc } = makeFlowService(order);
+    await svc.updateStatus('o1', { status: 'fulfilled' });
+    expect(order.items[0].deliveredQuantity).toBe(2);
+    expect(order.status).toBe('fulfilled');
+  });
+});
+
+describe('OrdersService — update keeps partial-delivery history', () => {
+  const hull = { id: 'hull', name: 'Hull', partType: 'hull', price: 1000 } as any;
+
+  const editMocks = (order: any) => {
+    const em = {
+      save: jest.fn(async (x: any) => x),
+      create: (_c: any, d: any) => d,
+      delete: jest.fn().mockResolvedValue({}),
+    };
+    const ds = { transaction: jest.fn((cb: any) => cb(em)) };
+    const orderRepo = {
+      findOne: jest.fn().mockResolvedValue(order),
+      save: jest.fn(async (x: any) => x),
+    };
+    const partRepo = { find: jest.fn().mockResolvedValue([hull]) };
+    const discountRepo = { find: jest.fn().mockResolvedValue([]) };
+    const svc = new OrdersService(
+      orderRepo as any,
+      partRepo as any,
+      discountRepo as any,
+      ds as any,
+      {} as any,
+    );
+    return { svc, em };
+  };
+
+  it('carries deliveredQuantity onto the matching new item lines', async () => {
+    const order = flowOrder({
+      status: 'in_progress',
+      items: [{ id: 1, part: hull, partName: 'Hull', quantity: 3, deliveredQuantity: 2, buildName: 'Realspace' }],
+    });
+    const { svc } = editMocks(order);
+    await svc.update('o1', {
+      items: [{ partId: 'hull', quantity: 3, buildName: 'Realspace' }],
+    });
+    expect(order.items[0]).toMatchObject({ quantity: 3, deliveredQuantity: 2 });
+  });
+
+  it('clamps carried deliveries when the quantity shrinks', async () => {
+    const order = flowOrder({
+      status: 'in_progress',
+      items: [{ id: 1, part: hull, partName: 'Hull', quantity: 3, deliveredQuantity: 3, buildName: null }],
+    });
+    const { svc } = editMocks(order);
+    await svc.update('o1', { items: [{ partId: 'hull', quantity: 1 }] });
+    expect(order.items[0]).toMatchObject({ quantity: 1, deliveredQuantity: 1 });
   });
 });

@@ -5,14 +5,15 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
-import * as crypto from 'crypto';
 import {
   BaseMaterial,
   BulkDiscount,
   computeCraftCosts,
   DiscountCode,
+  effectivePriceOf,
   expandAllPartMaterials,
   ExpandedMaterialRequirement,
+  generateReadableCode,
   MaterialSource,
   Order,
   OrderDiscountSource,
@@ -79,27 +80,6 @@ export class OrdersService {
     private readonly ds: DataSource,
     private readonly promoCodes: PromoCodesService,
   ) {}
-
-  private async generateUniqueOrderCode(): Promise<string> {
-    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // Excludes confusing characters 0/O, 1/I
-    const group = (): string => {
-      const bytes = crypto.randomBytes(4);
-      let out = '';
-      for (let i = 0; i < 4; i++) {
-        out += chars[bytes[i] % chars.length];
-      }
-      return out;
-    };
-
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const code = `SUB-${group()}-${group()}-${group()}`;
-      const existing = await this.orderRepo.findOne({ where: { orderCode: code } });
-      if (!existing) {
-        return code;
-      }
-    }
-    return `SUB-${Date.now().toString(36).toUpperCase()}`;
-  }
 
   private maskClientName(name: string | null | undefined): string {
     const trimmed = (name ?? '').trim();
@@ -248,7 +228,7 @@ export class OrdersService {
       let cost = 0;
       for (const req of expanded.get(p.id) ?? []) {
         const mat = matById.get(req.materialId);
-        let unit = mat ? (mat.myPrice ?? mat.marketPrice ?? mat.npcPrice ?? 0) : 0;
+        let unit = mat ? effectivePriceOf(mat) : 0;
         // Fall back to computed craft cost when a craftable material has no price set
         if (mat && unit <= 0) {
           unit = craftCosts.get(mat.id)?.craftCost ?? 0;
@@ -259,6 +239,13 @@ export class OrdersService {
     }
 
     const availableStock = new Map<string, number>();
+
+    // One part in a retainer may only cover one build: part stock is consumed
+    // across orders (confirmedAt order) and the same allocations feed both the
+    // per-order missing lists and the aggregate.
+    const partStockLeft = new Map(effStock);
+    const demandByPart = new Map<string, number>();
+    const coveredByPart = new Map<string, number>();
 
     const mapped = orders.map((o) => {
       let materialCost = 0;
@@ -283,11 +270,28 @@ export class OrdersService {
           quantity: item.quantity,
           deliveredQuantity: item.deliveredQuantity ?? 0,
           remaining,
-          stock: part ? (effStock.get(part.id) ?? part.stock) : 0,
+          stock: part ? (partStockLeft.get(part.id) ?? part.stock) : 0,
           unitPrice: item.unitPrice,
           lineTotal: item.lineTotal,
         };
       });
+
+      const demand = this.computeMissingMaterials(
+        o,
+        partsById,
+        partsByName,
+        matById,
+        expanded,
+        availableStock,
+        partStockLeft,
+      );
+      for (const [partId, qty] of demand.demandByPart) {
+        demandByPart.set(partId, (demandByPart.get(partId) ?? 0) + qty);
+      }
+      for (const [nestedId, qty] of demand.coveredByPart) {
+        coveredByPart.set(nestedId, (coveredByPart.get(nestedId) ?? 0) + qty);
+      }
+
       const revenue = Math.max(0, partsRevenue - o.discountAmt);
 
       return {
@@ -301,15 +305,7 @@ export class OrdersService {
         confirmedAt: o.confirmedAt,
         createdAt: o.createdAt,
         items,
-        missingMaterials: this.computeMissingMaterials(
-          o,
-          partsById,
-          partsByName,
-          matById,
-          expanded,
-          availableStock,
-          effStock,
-        ),
+        missingMaterials: demand.missing,
         financials: {
           revenue,
           materialCost,
@@ -318,14 +314,7 @@ export class OrdersService {
       };
     });
 
-    const aggregate = this.computeAggregate(
-      orders,
-      partsById,
-      partsByName,
-      matById,
-      expanded,
-      effStock,
-    );
+    const aggregate = this.computeAggregate(demandByPart, coveredByPart, matById, expanded);
 
     const revenue = mapped.reduce((sum, o) => sum + o.financials.revenue, 0);
     const materialCost = mapped.reduce(
@@ -344,13 +333,16 @@ export class OrdersService {
     };
   }
 
+  /**
+   * Aggregates the per-order demand collected by computeMissingMaterials so
+   * the combined view and the per-order lists never disagree on what stock
+   * was already promised to an earlier build.
+   */
   private computeAggregate(
-    orders: Order[],
-    partsById: Map<string, SubmarinePart>,
-    partsByName: Map<string, SubmarinePart>,
+    demandByPart: Map<string, number>,
+    coveredByPart: Map<string, number>,
     matById: Map<string, BaseMaterial>,
     expanded: Map<string, ExpandedMaterialRequirement[]>,
-    effStock?: Map<string, number>,
   ): {
     materials: Array<{
       materialId: string;
@@ -359,48 +351,19 @@ export class OrdersService {
       needed: number;
       available: number;
       missing: number;
+      whereToBuy: MaterialSource;
     }>;
   } {
-    const demandByPart = new Map<string, number>();
-    for (const o of orders) {
-      for (const item of o.items ?? []) {
-        const part = partsById.get(item.part?.id ?? '') ?? item.part;
-        if (!part) continue;
-        // Parts already handed over (partial deliveries) need no crafting.
-        const remaining = Math.max(0, item.quantity - (item.deliveredQuantity ?? 0));
-        const stock = effStock?.get(part.id) ?? part.stock;
-        const toCraft = Math.max(0, remaining - stock); // only craft what stock doesn't cover
-        if (toCraft <= 0) continue;
-        demandByPart.set(part.id, (demandByPart.get(part.id) ?? 0) + toCraft);
-      }
-    }
-
     const rawNeeds = new Map<string, number>();
-    const partNeeds = new Map<string, number>();
 
     for (const [partId, toCraft] of demandByPart) {
-      const part = partsById.get(partId)!;
-      for (const req of expanded.get(part.id) ?? []) {
+      for (const req of expanded.get(partId) ?? []) {
         rawNeeds.set(req.materialId, (rawNeeds.get(req.materialId) ?? 0) + toCraft * req.quantity);
       }
-      for (const pm of part.materials ?? []) {
-        if (!pm.material) continue;
-        const nested = partsByName.get(pm.material.name.toLowerCase());
-        if (!nested || nested.id === part.id) continue;
-        partNeeds.set(nested.id, (partNeeds.get(nested.id) ?? 0) + toCraft * pm.quantity);
-      }
     }
-
-    const coveredByPart = new Map<string, number>();
-    for (const [nestedId, needed] of partNeeds) {
-      const nested = partsById.get(nestedId);
-      if (!nested) continue;
-      const covered = Math.min(needed, effStock?.get(nested.id) ?? nested.stock);
-      coveredByPart.set(nestedId, covered);
-      if (covered > 0) {
-        for (const req of expanded.get(nested.id) ?? []) {
-          rawNeeds.set(req.materialId, (rawNeeds.get(req.materialId) ?? 0) - covered * req.quantity);
-        }
+    for (const [nestedId, covered] of coveredByPart) {
+      for (const req of expanded.get(nestedId) ?? []) {
+        rawNeeds.set(req.materialId, (rawNeeds.get(req.materialId) ?? 0) - covered * req.quantity);
       }
     }
 
@@ -448,20 +411,29 @@ export class OrdersService {
     matById: Map<string, BaseMaterial>,
     expanded: Map<string, ExpandedMaterialRequirement[]>,
     availableStock: Map<string, number>,
-    effStock?: Map<string, number>,
-  ): Array<{
-    materialId: string;
-    name: string;
-    itemId: number | null;
-    needed: number;
-    available: number;
-    missing: number;
-  }> {
+    /** Effective part stock, consumed as orders claim it (see findInProgress). */
+    partStockLeft?: Map<string, number>,
+  ): {
+    missing: Array<{
+      materialId: string;
+      name: string;
+      itemId: number | null;
+      needed: number;
+      available: number;
+      missing: number;
+    }>;
+    /** Parts this order still needs crafted, keyed by part id. */
+    demandByPart: Map<string, number>;
+    /** Nested parts covered from stock (their raw needs are discounted). */
+    coveredByPart: Map<string, number>;
+  } {
     const rawNeeds = new Map<string, { mat: BaseMaterial; needed: number }>();
     const partNeeds = new Map<
       string,
       { part: SubmarinePart; needed: number }
     >();
+    const demandByPart = new Map<string, number>();
+    const coveredByPart = new Map<string, number>();
 
     const addRaw = (mat: BaseMaterial, qty: number) => {
       const entry = rawNeeds.get(mat.id) ?? { mat, needed: 0 };
@@ -474,9 +446,16 @@ export class OrdersService {
       if (!part) continue;
       // Parts already handed over (partial deliveries) need no crafting.
       const remaining = Math.max(0, item.quantity - (item.deliveredQuantity ?? 0));
-      const stock = effStock?.get(part.id) ?? part.stock;
-      const toCraft = Math.max(0, remaining - stock);
+      const stock = partStockLeft?.get(part.id) ?? part.stock;
+      // Parts the build relies on from stock are reserved here so a later
+      // order cannot claim the same retainer part twice.
+      const coveredByStock = Math.min(remaining, stock);
+      const toCraft = remaining - coveredByStock;
+      if (partStockLeft && coveredByStock > 0) {
+        partStockLeft.set(part.id, stock - coveredByStock);
+      }
       if (toCraft <= 0) continue;
+      demandByPart.set(part.id, (demandByPart.get(part.id) ?? 0) + toCraft);
 
       for (const req of expanded.get(part.id) ?? []) {
         const mat = matById.get(req.materialId);
@@ -506,8 +485,13 @@ export class OrdersService {
     }> = [];
 
     for (const { part: nested, needed } of partNeeds.values()) {
-      const covered = Math.min(needed, effStock?.get(nested.id) ?? nested.stock);
+      const nestedStock = partStockLeft?.get(nested.id) ?? nested.stock;
+      const covered = Math.min(needed, nestedStock);
       if (covered > 0) {
+        if (partStockLeft) {
+          partStockLeft.set(nested.id, Math.max(0, nestedStock - covered));
+        }
+        coveredByPart.set(nested.id, (coveredByPart.get(nested.id) ?? 0) + covered);
         for (const req of expanded.get(nested.id) ?? []) {
           const rawMat = matById.get(req.materialId);
           if (rawMat) addRaw(rawMat, -covered * req.quantity);
@@ -534,7 +518,7 @@ export class OrdersService {
     }
 
     missing.sort((a, b) => b.missing - a.missing);
-    return missing;
+    return { missing, demandByPart, coveredByPart };
   }
 
   async findOne(id: string): Promise<Order> {
@@ -710,7 +694,9 @@ export class OrdersService {
       ? await this.promoCodes.assertUsable(dto.promoCode)
       : null;
     const plan = this.buildPricingPlan(preparedItems, discounts, promo, null);
-    const orderCode = await this.generateUniqueOrderCode();
+    const orderCode = await generateReadableCode('SUB', 3, (code) =>
+      this.orderRepo.exist({ where: { orderCode: code } }),
+    );
 
     const savedOrder = await this.ds.transaction(async (em) => {
       const order = em.create(Order, {
@@ -783,6 +769,7 @@ export class OrdersService {
 
   async updateStatus(id: string, dto: UpdateOrderStatusDto): Promise<Order> {
     const order = await this.findOne(id);
+    const wasCancelled = order.status === 'cancelled';
     order.status = dto.status;
 
     // Marking an order fulfilled by hand counts as a full delivery, so partial
@@ -796,6 +783,17 @@ export class OrdersService {
           }
         }
         await em.save(order);
+      });
+    } else if (dto.status === 'cancelled' && !wasCancelled) {
+      // Cancelling via the status dropdown must do the same promo release
+      // the dedicated cancel() endpoint does.
+      const appliedPromoId =
+        order.discountSource === 'promo' ? order.promoCodeId : null;
+      await this.ds.transaction(async (em) => {
+        await em.save(order);
+        if (appliedPromoId) {
+          await this.promoCodes.releaseTx(em, appliedPromoId);
+        }
       });
     } else {
       await this.orderRepo.save(order);
@@ -890,20 +888,38 @@ export class OrdersService {
         }
       }
 
+      // The panel always resends the full item list, so partial-delivery
+      // history is matched back onto the new lines by part + build.
+      const itemKey = (partId: string, buildName?: string | null) =>
+        `${partId}|${buildName ?? ''}`;
+      const priorDelivered = new Map<string, number[]>();
+      for (const old of order.items ?? []) {
+        const delivered = old.deliveredQuantity ?? 0;
+        if (delivered <= 0) continue;
+        const key = itemKey(old.part?.id ?? old.partName, old.buildName);
+        const list = priorDelivered.get(key) ?? [];
+        list.push(delivered);
+        priorDelivered.set(key, list);
+      }
+
       const preparedItems: Array<{
         part: SubmarinePart;
         partType: string;
         quantity: number;
         buildName: string | null;
         unitPrice: number;
+        deliveredQuantity: number;
       }> = dto.items.map((itemDto) => {
         const part = partMap.get(itemDto.partId)!;
+        const queue = priorDelivered.get(itemKey(itemDto.partId, itemDto.buildName ?? null));
+        const deliveredQuantity = Math.min(queue?.shift() ?? 0, itemDto.quantity);
         return {
           part,
           partType: part.partType,
           quantity: itemDto.quantity,
           buildName: itemDto.buildName ?? null,
           unitPrice: part.price,
+          deliveredQuantity,
         };
       });
       const discounts = await this.findBulkDiscounts();
@@ -936,6 +952,7 @@ export class OrdersService {
             unitPrice: pi.unitPrice,
             lineTotal: pi.unitPrice * pi.quantity,
             buildName: pi.buildName,
+            deliveredQuantity: pi.deliveredQuantity,
           }),
         );
         order.subtotal = plan.subtotal;
