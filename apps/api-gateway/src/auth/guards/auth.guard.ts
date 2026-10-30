@@ -16,6 +16,7 @@ import { ApiKey } from '@ff14/entities';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { FirebaseService } from '../firebase.service';
 import { WhitelistService } from '../whitelist.service';
+import { isPublicRoute } from '../../proxy/public-routes';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -112,37 +113,7 @@ export class AuthGuard implements CanActivate {
       }
     }
 
-    const isPublicClientRoute =
-      rawUrl === '/api/health' ||
-      rawUrl === '/health' ||
-      (method === 'POST' && (rawUrl === '/api/orders' || rawUrl === '/orders')) ||
-      (method === 'POST' &&
-        (rawUrl === '/api/promo-codes/validate' || rawUrl === '/promo-codes/validate')) ||
-      (method === 'GET' && (rawUrl.startsWith('/api/orders/lookup/') || rawUrl.startsWith('/orders/lookup/'))) ||
-      (method === 'GET' && (rawUrl === '/api/orders/in-progress' || rawUrl === '/orders/in-progress')) ||
-      (method === 'GET' && (rawUrl === '/api/inventory/missing' || rawUrl === '/inventory/missing')) ||
-      (method === 'POST' &&
-        (rawUrl === '/api/inventory/claims' || rawUrl === '/inventory/claims')) ||
-      (method === 'GET' &&
-        (rawUrl.startsWith('/api/inventory/claims/lookup/') ||
-          rawUrl.startsWith('/inventory/claims/lookup/'))) ||
-      (method === 'POST' &&
-        /^\/(api\/)?inventory\/claims\/[^/]+\/(cancel|complete)$/.test(rawUrl)) ||
-      (method === 'GET' && (rawUrl === '/api/about' || rawUrl === '/about' || rawUrl.startsWith('/api/about/') || rawUrl.startsWith('/about/'))) ||
-      (method === 'GET' && (rawUrl.startsWith('/api/docs') || rawUrl.startsWith('/docs'))) ||
-      (method === 'GET' &&
-        (rawUrl.startsWith('/api/recipes') ||
-          rawUrl.startsWith('/recipes') ||
-          rawUrl.startsWith('/api/materials') ||
-          rawUrl.startsWith('/materials') ||
-          rawUrl.startsWith('/api/prices') ||
-          rawUrl.startsWith('/prices') ||
-          rawUrl.startsWith('/api/discounts') ||
-          rawUrl.startsWith('/discounts') ||
-          rawUrl.startsWith('/api/crafter-discounts') ||
-          rawUrl.startsWith('/crafter-discounts')));
-
-    if (isPublicClientRoute) {
+    if (isPublicRoute(method, rawUrl)) {
       return true;
     }
 
