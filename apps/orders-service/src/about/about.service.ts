@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { BaseMaterial, Order, OrderStatus } from '@ff14/entities';
+import { BaseMaterial, effectivePriceOf, Order, OrderStatus } from '@ff14/entities';
 
 export interface AboutStats {
   generatedAt: string;
@@ -59,10 +59,6 @@ export class AboutService {
     @InjectDataSource()
     private readonly ds: DataSource,
   ) {}
-
-  private effectivePriceOf(mat: BaseMaterial): number {
-    return mat.myPrice ?? mat.marketPrice ?? mat.npcPrice ?? 0;
-  }
 
   /** Continuous percentile (same interpolation as Postgres percentile_cont). */
   private percentile(sorted: number[], p: number): number {
@@ -157,7 +153,7 @@ export class AboutService {
     for (const mat of materials) {
       if (mat.currentStock <= 0) continue;
       marketWorth += mat.currentStock * (mat.marketPrice ?? 0);
-      myWorth += mat.currentStock * this.effectivePriceOf(mat);
+      myWorth += mat.currentStock * effectivePriceOf(mat);
     }
 
     const topParts = [...partQuantity.entries()]

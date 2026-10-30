@@ -178,7 +178,7 @@ export class PricesService {
   }
 
   private mapToPriceItem(mat: BaseMaterial): MaterialPriceItem {
-    const effectivePrice = mat.myPrice ?? mat.marketPrice ?? mat.npcPrice ?? 0;
+    const effectivePrice = effectivePriceOf(mat);
     return {
       id: mat.id,
       name: mat.name,
@@ -240,11 +240,6 @@ export class PricesService {
     const saved = await this.repo.save(mat);
     await this.cache.reset();
     return this.mapToPriceItem(saved);
-  }
-
-  private effectivePriceOf(mat: BaseMaterial | null | undefined): number {
-    if (!mat) return 0;
-    return mat.myPrice ?? mat.marketPrice ?? mat.npcPrice ?? 0;
   }
 
   /**

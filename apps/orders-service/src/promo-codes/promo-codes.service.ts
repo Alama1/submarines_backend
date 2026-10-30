@@ -6,8 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
-import * as crypto from 'crypto';
-import { DiscountCode, DiscountCodeType } from '@ff14/entities';
+import { DiscountCode, DiscountCodeType, generateReadableCode } from '@ff14/entities';
 import { PromoCodeRejectionReason } from '@ff14/types';
 import { CreatePromoCodeDto } from './dto/create-promo-code.dto';
 import { UpdatePromoCodeDto } from './dto/update-promo-code.dto';
@@ -42,19 +41,6 @@ export class PromoCodesService {
       );
     }
     return normalized;
-  }
-
-  private generateCodeValue(): string {
-    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // Excludes confusing characters 0/O, 1/I
-    const group = (): string => {
-      const bytes = crypto.randomBytes(4);
-      let out = '';
-      for (let i = 0; i < 4; i++) {
-        out += chars[bytes[i] % chars.length];
-      }
-      return out;
-    };
-    return `PROMO-${group()}-${group()}`;
   }
 
   /** Status of a code at a point in time. Assumes the entity exists. */
@@ -227,12 +213,9 @@ export class PromoCodesService {
   }
 
   private async generateUniqueCode(): Promise<string> {
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const code = this.generateCodeValue();
-      const existing = await this.repo.findOne({ where: { code } });
-      if (!existing) return code;
-    }
-    return `PROMO-${Date.now().toString(36).toUpperCase()}`;
+    return generateReadableCode('PROMO', 2, (code) =>
+      this.repo.exist({ where: { code } }),
+    );
   }
 
   private assertValueInRange(type: DiscountCodeType, value: number): void {
