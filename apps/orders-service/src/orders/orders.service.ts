@@ -118,7 +118,11 @@ export class OrdersService {
     return { items, total };
   }
 
-  async findInProgress(unmask = false): Promise<{
+  /** Default = builds being crafted; /missing adds confirmed (pre-craft) demand. */
+  async findInProgress(
+    unmask = false,
+    statuses: OrderStatus[] = ['in_progress'],
+  ): Promise<{
     orders: Array<{
       id: string;
       orderCode: string;
@@ -173,7 +177,7 @@ export class OrdersService {
       .createQueryBuilder('o')
       .leftJoinAndSelect('o.items', 'items')
       .leftJoinAndSelect('items.part', 'part')
-      .where('o.status = :status', { status: 'in_progress' })
+      .where('o.status IN (:...statuses)', { statuses })
       .orderBy('o.confirmedAt', 'ASC')
       .getMany();
 

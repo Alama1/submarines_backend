@@ -153,7 +153,7 @@ export class InventoryService {
 
     try {
       const res = await fetch(
-        `${base.replace(/\/$/, '')}/api/orders/in-progress`,
+        `${base.replace(/\/$/, '')}/api/orders/in-progress?statuses=confirmed,in_progress`,
         {
           headers: { 'x-internal-token': process.env.INTERNAL_TOKEN ?? '' },
           signal: AbortSignal.timeout(3000),
@@ -200,7 +200,8 @@ export class InventoryService {
       .orderBy('deficit_calc', 'DESC')
       .getMany();
 
-    // Materials demanded only by in-progress builds (no stock target of their own).
+    // Materials demanded only by active builds (confirmed + in progress),
+    // with no stock target of their own.
     const orderOnlyIds = [...orderNeeds.keys()].filter(
       (id) => !materials.some((m) => m.id === id),
     );

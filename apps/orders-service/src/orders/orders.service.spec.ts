@@ -908,3 +908,40 @@ describe('OrdersService — update keeps partial-delivery history', () => {
     expect(order.items[0]).toMatchObject({ quantity: 1, deliveredQuantity: 1 });
   });
 });
+
+describe('OrdersService — findInProgress status filter', () => {
+  const activeWhereCalls = async (statuses?: string[]) => {
+    const whereCalls: Array<{ statuses?: string[]; status?: string }> = [];
+    const qb = {
+      leftJoinAndSelect: () => qb,
+      where: (_sql: string, params: any) => {
+        whereCalls.push(params);
+        return qb;
+      },
+      orderBy: () => qb,
+      getMany: async () => [],
+    };
+    const svc = new OrdersService(
+      { createQueryBuilder: () => qb } as any,
+      { find: async () => [] } as any,
+      {} as any,
+      { getRepository: () => ({ find: async () => [] }) } as any,
+      {} as any,
+    );
+    await svc.findInProgress(false, statuses as any);
+    // Finished-order reservation query must stay single-status.
+    expect(whereCalls).toContainEqual({ status: 'finished' });
+    return whereCalls.find((p) => p.statuses)?.statuses;
+  };
+
+  it('defaults to in_progress only (dashboard + client build queue)', async () => {
+    expect(await activeWhereCalls()).toEqual(['in_progress']);
+  });
+
+  it('queries exactly the statuses passed (/missing sends confirmed + in_progress)', async () => {
+    expect(await activeWhereCalls(['confirmed', 'in_progress'])).toEqual([
+      'confirmed',
+      'in_progress',
+    ]);
+  });
+});

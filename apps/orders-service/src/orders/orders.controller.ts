@@ -38,8 +38,13 @@ export class OrdersController {
   }
 
   @Get('in-progress')
-  findInProgress() {
-    return this.svc.findInProgress();
+  findInProgress(@Query('statuses') statuses?: string) {
+    // Unset (the client build queue) stays in_progress-only;
+    // /inventory/missing passes confirmed + in_progress.
+    return this.svc.findInProgress(
+      false,
+      statuses ? (statuses.split(',').filter(Boolean) as OrderStatus[]) : undefined,
+    );
   }
 
   @Get('admin/in-progress')
