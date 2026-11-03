@@ -7,7 +7,7 @@ import { CacheModule } from '@nestjs/cache-manager';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { InternalTokenGuard } from '@ff14/internal-auth';
-import { AppSetting, BaseMaterial, CharacterInventory, CraftClaim, CraftClaimItem, CrafterBulkDiscount, MaterialIngredient, PartMaterial, RetainerInventory, SubmarinePart } from '@ff14/entities';
+import { BaseMaterial, CharacterInventory, CraftClaim, CraftClaimItem, CrafterBulkDiscount, MaterialIngredient, PartMaterial, RetainerInventory, SubmarinePart, TrustedCrafterCode } from '@ff14/entities';
 import { HealthController } from './health/health.controller';
 import { InventoryModule } from './inventory/inventory.module';
 
@@ -30,7 +30,7 @@ import { InventoryModule } from './inventory/inventory.module';
           database: cfg.get<string>('POSTGRES_DB', 'ff14_db'),
           username: cfg.get<string>('POSTGRES_USER', 'ff14'),
           password,
-          entities: [AppSetting, BaseMaterial, CraftClaim, CraftClaimItem, CrafterBulkDiscount, MaterialIngredient, PartMaterial, SubmarinePart, CharacterInventory, RetainerInventory],
+          entities: [BaseMaterial, CraftClaim, CraftClaimItem, CrafterBulkDiscount, MaterialIngredient, PartMaterial, SubmarinePart, CharacterInventory, RetainerInventory, TrustedCrafterCode],
           migrations: [join(__dirname, '../../..', 'packages/entities/dist/migrations/*.js')],
           migrationsRun: true,
           namingStrategy: new SnakeNamingStrategy(),

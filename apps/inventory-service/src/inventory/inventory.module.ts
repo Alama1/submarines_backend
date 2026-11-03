@@ -3,13 +3,13 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import {
-  AppSetting,
   BaseMaterial,
   CharacterInventory,
   CraftClaim,
   CrafterBulkDiscount,
   RetainerInventory,
   SubmarinePart,
+  TrustedCrafterCode,
 } from '@ff14/entities';
 import { InventoryController } from './inventory.controller';
 import { InventoryService } from './inventory.service';
@@ -19,13 +19,13 @@ import { ClaimsService } from './claims.service';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      AppSetting,
       BaseMaterial,
       CraftClaim,
       SubmarinePart,
       CharacterInventory,
       RetainerInventory,
       CrafterBulkDiscount,
+      TrustedCrafterCode,
     ]),
     ClientsModule.registerAsync([
       {

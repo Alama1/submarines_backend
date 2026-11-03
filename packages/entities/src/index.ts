@@ -7,6 +7,7 @@ export { RetainerInventory } from './retainer-inventory.entity';
 export { StoredBag, StoredItem, characterKeyOf } from './inventory-cache.types';
 export { MaterialIngredient } from './material-ingredient.entity';
 export { AppSetting } from './app-setting.entity';
+export { TrustedCrafterCode } from './trusted-crafter-code.entity';
 export { PartMaterial } from './part-material.entity';
 export { SubmarinePart } from './submarine-part.entity';
 export { Order, OrderStatus, OrderDiscountSource } from './order.entity';

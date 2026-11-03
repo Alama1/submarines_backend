@@ -21,6 +21,7 @@ const RULES: PublicRouteRule[] = [
   { methods: ['GET'], pattern: /^\/inventory\/missing$/ },
   { methods: ['POST'], pattern: /^\/inventory\/claims$/ },
   { methods: ['GET'], pattern: /^\/inventory\/claims\/lookup\// },
+  { methods: ['GET'], pattern: /^\/inventory\/claims\/trusted\// },
   { methods: ['POST'], pattern: /^\/inventory\/claims\/[^/]+\/(cancel|complete)$/ },
   { methods: ['GET'], pattern: /^\/about(\/|$)/ },
   { methods: ['GET'], pattern: /^\/docs(\/|$)/ },

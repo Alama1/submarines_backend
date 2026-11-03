@@ -8,11 +8,11 @@ import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, LessThan, Repository } from 'typeorm';
 import {
-  AppSetting,
   BaseMaterial,
   CraftClaim,
   CraftClaimStatus,
   CrafterBulkDiscount,
+  TrustedCrafterCode,
   effectivePriceOf,
   generateReadableCode,
 } from '@ff14/entities';
@@ -29,8 +29,6 @@ export class ClaimsService {
     'confirmed',
   ];
 
-  static readonly TRUSTED_CODE_KEY = 'trusted_crafter_code';
-
   /** A pending claim holds its materials for this long before auto-cancelling. */
   private static readonly PENDING_TTL_MS = 60 * 60 * 1000;
 
@@ -41,8 +39,8 @@ export class ClaimsService {
     private readonly materialRepo: Repository<BaseMaterial>,
     @InjectRepository(CrafterBulkDiscount)
     private readonly bonusRepo: Repository<CrafterBulkDiscount>,
-    @InjectRepository(AppSetting)
-    private readonly settingRepo: Repository<AppSetting>,
+    @InjectRepository(TrustedCrafterCode)
+    private readonly trustedRepo: Repository<TrustedCrafterCode>,
   ) {}
 
   private async resolveBonusPct(totalUnits: number): Promise<number> {
@@ -88,16 +86,17 @@ export class ClaimsService {
     const bonusPct = await this.resolveBonusPct(totalUnits);
     const bonusAmount = Math.round(subtotal * (bonusPct / 100));
 
-    // Trusted crafters (access code from the admin panel) skip confirmation —
-    // their claims are born confirmed, so the pending-TTL cron never touches them.
-    const trusted = await this.isTrustedAccessCode(dto.accessCode);
+    // Trusted crafters (named access code from the admin panel) skip confirmation —
+    // their claims are born confirmed with the name attached to the code, so the
+    // pending-TTL cron never touches them and admin-labelled crafters can't misname.
+    const trusted = await this.matchTrustedCode(dto.accessCode);
 
     return this.claimRepo.save(
       this.claimRepo.create({
         claimCode: await generateReadableCode('CLM', 3, (code) =>
           this.claimRepo.exist({ where: { claimCode: code } }),
         ),
-        nickname: dto.nickname.trim(),
+        nickname: trusted ? trusted.name : dto.nickname.trim(),
         status: trusted ? 'confirmed' : 'pending',
         confirmedAt: trusted ? new Date() : null,
         subtotal,
@@ -109,27 +108,35 @@ export class ClaimsService {
     );
   }
 
-  async getTrustedCode(): Promise<string | null> {
-    const row = await this.settingRepo.findOne({
-      where: { key: ClaimsService.TRUSTED_CODE_KEY },
-    });
-    return row?.value ?? null;
+  private async matchTrustedCode(accessCode?: string): Promise<TrustedCrafterCode | null> {
+    const code = accessCode?.trim().toUpperCase();
+    if (!code) return null;
+    return this.trustedRepo.findOne({ where: { code } });
   }
 
-  private async isTrustedAccessCode(accessCode?: string): Promise<boolean> {
-    if (!accessCode?.trim()) return false;
-    const current = await this.getTrustedCode();
-    return !!current && accessCode.trim().toUpperCase() === current.toUpperCase();
+  async listTrustedCodes(): Promise<TrustedCrafterCode[]> {
+    return this.trustedRepo.find({ order: { createdAt: 'DESC' } });
   }
 
-  /** Rotates the single shared trusted-crafter code; old codes stop working. */
-  async rotateTrustedCode(): Promise<string> {
-    const code = await generateReadableCode('TRU', 2, async () => false);
-    await this.settingRepo.upsert(
-      { key: ClaimsService.TRUSTED_CODE_KEY, value: code },
-      ['key'],
+  /** Issues a new per-crafter code; the name is what the client site auto-fills. */
+  async createTrustedCode(name: string): Promise<TrustedCrafterCode> {
+    const code = await generateReadableCode('TRU', 2, (candidate) =>
+      this.trustedRepo.exist({ where: { code: candidate } }),
     );
-    return code;
+    return this.trustedRepo.save(this.trustedRepo.create({ code, name: name.trim() }));
+  }
+
+  /** Public FE lookup: the code itself is the secret, so knowing one proves trust. */
+  async lookupTrustedName(code: string): Promise<string> {
+    const row = await this.matchTrustedCode(code);
+    if (!row) throw new NotFoundException('Access code not recognised');
+    return row.name;
+  }
+
+  /** Revokes a code; claims already made under it are untouched. */
+  async revokeTrustedCode(id: string): Promise<void> {
+    const { affected } = await this.trustedRepo.delete({ id });
+    if (!affected) throw new NotFoundException(`Trusted code "${id}" not found`);
   }
 
   /**

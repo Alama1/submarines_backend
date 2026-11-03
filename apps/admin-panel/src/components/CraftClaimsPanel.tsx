@@ -12,6 +12,7 @@ import {
   CheckCircle,
   KeyRound,
   RefreshCw,
+  X,
 } from 'lucide-react';
 import { CRAFT_CLAIM_STATUSES, CraftClaim, CraftClaimStatus } from '@ff14/types';
 import { StatusBadge } from './StatusBadge';
@@ -26,6 +27,12 @@ const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: 'cancelled', label: 'Cancelled' },
   { value: 'all', label: 'All' },
 ];
+
+interface TrustedCode {
+  id: string;
+  code: string;
+  name: string;
+}
 
 const statusSelectClass: Record<CraftClaimStatus, string> = {
   pending: 'text-amber-700',
@@ -87,16 +94,26 @@ export const CraftClaimsPanel: React.FC = () => {
     onError,
   });
 
-  const { data: trusted } = useQuery<{ code: string | null }>({
-    queryKey: ['trusted-code'],
-    queryFn: async () => (await api.get('/inventory/claims/admin/trusted-code')).data,
+  const [trustedName, setTrustedName] = useState('');
+
+  const { data: trustedCodes } = useQuery<TrustedCode[]>({
+    queryKey: ['trusted-codes'],
+    queryFn: async () => (await api.get('/inventory/claims/admin/trusted-codes')).data,
   });
 
-  const rotateTrustedMutation = useMutation({
-    mutationFn: async () =>
-      (await api.post<{ code: string }>('/inventory/claims/admin/trusted-code')).data,
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ['trusted-code'] }),
+  const createTrustedMutation = useMutation({
+    mutationFn: async (name: string) =>
+      (await api.post<TrustedCode>('/inventory/claims/admin/trusted-codes', { name })).data,
+    onSuccess: () => {
+      setTrustedName('');
+      queryClient.invalidateQueries({ queryKey: ['trusted-codes'] });
+    },
+    onError,
+  });
+
+  const revokeTrustedMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/inventory/claims/admin/trusted-codes/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['trusted-codes'] }),
     onError,
   });
 
@@ -124,28 +141,58 @@ export const CraftClaimsPanel: React.FC = () => {
         )}
       </div>
 
-      {/* Trusted crafter access code — claims sent with it skip confirmation */}
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-        <KeyRound className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
-        <span className="text-[11px] font-semibold text-amber-700">Trusted access code:</span>
-        {trusted?.code ? (
-          <code className="font-mono text-xs font-bold text-amber-800">{trusted.code}</code>
-        ) : (
-          <span className="text-[11px] text-amber-600 italic">none yet</span>
-        )}
-        <button
-          onClick={() => rotateTrustedMutation.mutate()}
-          disabled={rotateTrustedMutation.isPending}
-          className="ml-auto flex items-center gap-1 px-2 py-1 rounded bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-semibold transition disabled:opacity-50"
-          title={
-            trusted?.code
-              ? 'Generate a new code — the old one stops working'
-              : 'Generate the first access code'
-          }
-        >
-          <RefreshCw className={`w-3 h-3 ${rotateTrustedMutation.isPending ? 'animate-spin' : ''}`} />
-          {trusted?.code ? 'Generate new code' : 'Generate code'}
-        </button>
+      {/* Trusted crafter codes — claims made with one skip confirmation and adopt its name */}
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <KeyRound className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+          <span className="text-[11px] font-semibold text-amber-700">Trusted crafter codes:</span>
+          {(trustedCodes ?? []).length === 0 ? (
+            <span className="text-[11px] text-amber-600 italic">none yet</span>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {(trustedCodes ?? []).map(({ id, code, name }) => (
+                <span
+                  key={id}
+                  className="flex items-center gap-1.5 rounded bg-white border border-amber-200 px-1.5 py-0.5"
+                >
+                  <span className="text-[11px] font-semibold text-amber-900">{name}</span>
+                  <code className="font-mono text-[11px] text-amber-800 select-all">{code}</code>
+                  <button
+                    onClick={() => revokeTrustedMutation.mutate(id)}
+                    disabled={revokeTrustedMutation.isPending}
+                    title={`Revoke ${name}'s code — claims already made stay`}
+                    className="text-amber-600 hover:text-red-600 transition"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex gap-1.5">
+          <input
+            value={trustedName}
+            onChange={(e) => setTrustedName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && trustedName.trim()) createTrustedMutation.mutate(trustedName.trim());
+            }}
+            maxLength={60}
+            placeholder="Crafter name"
+            className="flex-1 min-w-0 rounded border border-amber-200 bg-white px-2 py-1 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+          />
+          <button
+            onClick={() => createTrustedMutation.mutate(trustedName.trim())}
+            disabled={!trustedName.trim() || createTrustedMutation.isPending}
+            className="flex items-center gap-1 px-2 py-1 rounded bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-semibold transition disabled:opacity-50"
+            title="Generate a named code — claims made with it are auto-confirmed under this name"
+          >
+            <RefreshCw
+              className={`w-3 h-3 ${createTrustedMutation.isPending ? 'animate-spin' : ''}`}
+            />
+            Generate code
+          </button>
+        </div>
       </div>
 
       {/* Status filter */}

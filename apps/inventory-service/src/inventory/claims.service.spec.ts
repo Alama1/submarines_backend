@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { AppSetting, BaseMaterial, CraftClaim, CrafterBulkDiscount } from '@ff14/entities';
+import { BaseMaterial, CraftClaim, CrafterBulkDiscount, TrustedCrafterCode } from '@ff14/entities';
 import { ClaimsService } from './claims.service';
 
 describe('ClaimsService', () => {
@@ -17,7 +17,14 @@ describe('ClaimsService', () => {
   };
   let materialRepo: { find: jest.Mock };
   let bonusRepo: { find: jest.Mock };
-  let settingRepo: { findOne: jest.Mock; upsert: jest.Mock };
+  let trustedRepo: {
+    findOne: jest.Mock;
+    find: jest.Mock;
+    exist: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    delete: jest.Mock;
+  };
 
   const material = (overrides: Partial<BaseMaterial> = {}) =>
     ({
@@ -41,7 +48,14 @@ describe('ClaimsService', () => {
     };
     materialRepo = { find: jest.fn() };
     bonusRepo = { find: jest.fn().mockResolvedValue([]) };
-    settingRepo = { findOne: jest.fn().mockResolvedValue(null), upsert: jest.fn() };
+    trustedRepo = {
+      findOne: jest.fn().mockResolvedValue(null),
+      find: jest.fn().mockResolvedValue([]),
+      exist: jest.fn().mockResolvedValue(false),
+      create: jest.fn((x) => x),
+      save: jest.fn(async (x) => ({ ...x, id: 'tc-1' })),
+      delete: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -49,7 +63,7 @@ describe('ClaimsService', () => {
         { provide: getRepositoryToken(CraftClaim), useValue: claimRepo },
         { provide: getRepositoryToken(BaseMaterial), useValue: materialRepo },
         { provide: getRepositoryToken(CrafterBulkDiscount), useValue: bonusRepo },
-        { provide: getRepositoryToken(AppSetting), useValue: settingRepo },
+        { provide: getRepositoryToken(TrustedCrafterCode), useValue: trustedRepo },
       ],
     }).compile();
 
@@ -118,9 +132,9 @@ describe('ClaimsService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('creates a trusted claim as confirmed and stamps confirmedAt', async () => {
+    it('confirms a trusted claim under the name attached to the code', async () => {
       materialRepo.find.mockResolvedValue([material()]);
-      settingRepo.findOne.mockResolvedValue({ value: 'TRU-AAAA-BBBB' });
+      trustedRepo.findOne.mockResolvedValue({ code: 'TRU-AAAA-BBBB', name: 'Max' });
 
       await svc.create({
         nickname: 'Alice',
@@ -128,14 +142,15 @@ describe('ClaimsService', () => {
         accessCode: ' tru-aaaa-bbbb ',
       });
 
+      expect(trustedRepo.findOne).toHaveBeenCalledWith({ where: { code: 'TRU-AAAA-BBBB' } });
       const created = claimRepo.create.mock.calls[0][0];
+      expect(created.nickname).toBe('Max');
       expect(created.status).toBe('confirmed');
       expect(created.confirmedAt).toBeInstanceOf(Date);
     });
 
-    it('leaves a claim pending when the access code does not match', async () => {
+    it('leaves a claim pending when the access code is unknown', async () => {
       materialRepo.find.mockResolvedValue([material()]);
-      settingRepo.findOne.mockResolvedValue({ value: 'TRU-AAAA-BBBB' });
 
       await svc.create({
         nickname: 'Alice',
@@ -143,32 +158,46 @@ describe('ClaimsService', () => {
         accessCode: 'TRU-WRONG-CODE',
       });
 
-      expect(claimRepo.create.mock.calls[0][0].status).toBe('pending');
+      const created = claimRepo.create.mock.calls[0][0];
+      expect(created.status).toBe('pending');
+      expect(created.nickname).toBe('Alice');
     });
 
-    it('leaves a claim pending when no trusted code is configured', async () => {
+    it('leaves a claim pending when no access code is sent', async () => {
       materialRepo.find.mockResolvedValue([material()]);
-      settingRepo.findOne.mockResolvedValue(null);
 
       await svc.create({
         nickname: 'Alice',
         items: [{ materialId: 'mat-1', quantity: 1 }],
-        accessCode: 'TRU-ANY-CODE',
       });
 
       expect(claimRepo.create.mock.calls[0][0].status).toBe('pending');
+      expect(trustedRepo.findOne).not.toHaveBeenCalled();
     });
   });
 
-  describe('trusted access code', () => {
-    it('rotates into a TRU code stored in app_settings', async () => {
-      const code = await svc.rotateTrustedCode();
+  describe('trusted crafter codes', () => {
+    it('generates a TRU code attached to the crafter name', async () => {
+      const row = await svc.createTrustedCode('  Max  ');
 
-      expect(code).toMatch(/^TRU-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$/);
-      expect(settingRepo.upsert).toHaveBeenCalledWith(
-        { key: 'trusted_crafter_code', value: code },
-        ['key'],
-      );
+      expect(row.code).toMatch(/^TRU-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$/);
+      expect(trustedRepo.create.mock.calls[0][0]).toEqual({ code: row.code, name: 'Max' });
+    });
+
+    it('looks a code up case-insensitively and 404s on unknown codes', async () => {
+      trustedRepo.findOne.mockResolvedValue({ code: 'TRU-AAAA-BBBB', name: 'Max' });
+      await expect(svc.lookupTrustedName(' tru-aaaa-bbbb ')).resolves.toBe('Max');
+
+      trustedRepo.findOne.mockResolvedValue(null);
+      await expect(svc.lookupTrustedName('TRU-NOPE-NOPE')).rejects.toThrow(NotFoundException);
+    });
+
+    it('revokes a code and 404s when it is already gone', async () => {
+      await svc.revokeTrustedCode('tc-1');
+      expect(trustedRepo.delete).toHaveBeenCalledWith({ id: 'tc-1' });
+
+      trustedRepo.delete.mockResolvedValue({ affected: 0 });
+      await expect(svc.revokeTrustedCode('gone')).rejects.toThrow(NotFoundException);
     });
   });
 

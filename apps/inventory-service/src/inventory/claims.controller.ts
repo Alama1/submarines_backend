@@ -13,6 +13,7 @@ import {
 import { CraftClaimStatus } from '@ff14/entities';
 import { ClaimsService } from './claims.service';
 import { CreateCraftClaimDto } from './dto/create-craft-claim.dto';
+import { CreateTrustedCodeDto } from './dto/create-trusted-code.dto';
 import { UpdateClaimStatusDto } from './dto/update-claim-status.dto';
 
 @Controller('inventory/claims')
@@ -51,14 +52,25 @@ export class ClaimsController {
     return this.svc.findAll(statuses?.length ? statuses : undefined);
   }
 
-  @Get('admin/trusted-code')
-  getTrustedCode() {
-    return this.svc.getTrustedCode().then((code) => ({ code }));
+  /** Public lookup of a trusted access code's attached crafter name. */
+  @Get('trusted/:code')
+  lookupTrustedCode(@Param('code') code: string) {
+    return this.svc.lookupTrustedName(code).then((name) => ({ name }));
   }
 
-  @Post('admin/trusted-code')
-  rotateTrustedCode() {
-    return this.svc.rotateTrustedCode().then((code) => ({ code }));
+  @Get('admin/trusted-codes')
+  listTrustedCodes() {
+    return this.svc.listTrustedCodes();
+  }
+
+  @Post('admin/trusted-codes')
+  createTrustedCode(@Body() dto: CreateTrustedCodeDto) {
+    return this.svc.createTrustedCode(dto.name);
+  }
+
+  @Delete('admin/trusted-codes/:id')
+  revokeTrustedCode(@Param('id') id: string) {
+    return this.svc.revokeTrustedCode(id);
   }
 
   @Patch('admin/:id/confirm')
