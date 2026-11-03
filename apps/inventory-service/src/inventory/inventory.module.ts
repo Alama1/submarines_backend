@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import {
+  AppSetting,
   BaseMaterial,
   CharacterInventory,
   CraftClaim,
@@ -18,6 +19,7 @@ import { ClaimsService } from './claims.service';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
+      AppSetting,
       BaseMaterial,
       CraftClaim,
       SubmarinePart,

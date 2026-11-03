@@ -263,11 +263,12 @@ export class InventoryService {
     const grouped = new Map<string, MaterialClaimSummary[]>();
     if (!materialIds.length) return grouped;
 
-    // Only confirmed claims count towards the shopping list: pending ones are
-    // not approved yet, and completed ones already landed in currentStock —
-    // counting them again would suppress the list forever.
+    // Confirmed and pending claims reserve materials — pending for one hour
+    // (the claims cron cancels stale ones), which kills double-claiming before
+    // approval. Completed ones already landed in currentStock — counting them
+    // again would suppress the list forever.
     const claims = await this.claimRepo.find({
-      where: { status: In(['confirmed'] as const) },
+      where: { status: In(['confirmed', 'pending'] as const) },
       order: { createdAt: 'ASC' },
     });
 

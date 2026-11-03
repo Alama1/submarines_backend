@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { BaseMaterial, CraftClaim, CrafterBulkDiscount } from '@ff14/entities';
+import { AppSetting, BaseMaterial, CraftClaim, CrafterBulkDiscount } from '@ff14/entities';
 import { ClaimsService } from './claims.service';
 
 describe('ClaimsService', () => {
@@ -12,10 +12,12 @@ describe('ClaimsService', () => {
     find: jest.Mock;
     create: jest.Mock;
     save: jest.Mock;
+    update: jest.Mock;
     createQueryBuilder: jest.Mock;
   };
   let materialRepo: { find: jest.Mock };
   let bonusRepo: { find: jest.Mock };
+  let settingRepo: { findOne: jest.Mock; upsert: jest.Mock };
 
   const material = (overrides: Partial<BaseMaterial> = {}) =>
     ({
@@ -34,10 +36,12 @@ describe('ClaimsService', () => {
       find: jest.fn(),
       create: jest.fn((x) => x),
       save: jest.fn(async (x) => ({ ...x, id: x.id ?? 'claim-new' })),
+      update: jest.fn().mockResolvedValue({ affected: 0 }),
       createQueryBuilder: jest.fn(),
     };
     materialRepo = { find: jest.fn() };
     bonusRepo = { find: jest.fn().mockResolvedValue([]) };
+    settingRepo = { findOne: jest.fn().mockResolvedValue(null), upsert: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -45,6 +49,7 @@ describe('ClaimsService', () => {
         { provide: getRepositoryToken(CraftClaim), useValue: claimRepo },
         { provide: getRepositoryToken(BaseMaterial), useValue: materialRepo },
         { provide: getRepositoryToken(CrafterBulkDiscount), useValue: bonusRepo },
+        { provide: getRepositoryToken(AppSetting), useValue: settingRepo },
       ],
     }).compile();
 
@@ -111,6 +116,71 @@ describe('ClaimsService', () => {
       await expect(
         svc.create({ nickname: 'Alice', items: [{ materialId: 'ghost', quantity: 1 }] }),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('creates a trusted claim as confirmed and stamps confirmedAt', async () => {
+      materialRepo.find.mockResolvedValue([material()]);
+      settingRepo.findOne.mockResolvedValue({ value: 'TRU-AAAA-BBBB' });
+
+      await svc.create({
+        nickname: 'Alice',
+        items: [{ materialId: 'mat-1', quantity: 1 }],
+        accessCode: ' tru-aaaa-bbbb ',
+      });
+
+      const created = claimRepo.create.mock.calls[0][0];
+      expect(created.status).toBe('confirmed');
+      expect(created.confirmedAt).toBeInstanceOf(Date);
+    });
+
+    it('leaves a claim pending when the access code does not match', async () => {
+      materialRepo.find.mockResolvedValue([material()]);
+      settingRepo.findOne.mockResolvedValue({ value: 'TRU-AAAA-BBBB' });
+
+      await svc.create({
+        nickname: 'Alice',
+        items: [{ materialId: 'mat-1', quantity: 1 }],
+        accessCode: 'TRU-WRONG-CODE',
+      });
+
+      expect(claimRepo.create.mock.calls[0][0].status).toBe('pending');
+    });
+
+    it('leaves a claim pending when no trusted code is configured', async () => {
+      materialRepo.find.mockResolvedValue([material()]);
+      settingRepo.findOne.mockResolvedValue(null);
+
+      await svc.create({
+        nickname: 'Alice',
+        items: [{ materialId: 'mat-1', quantity: 1 }],
+        accessCode: 'TRU-ANY-CODE',
+      });
+
+      expect(claimRepo.create.mock.calls[0][0].status).toBe('pending');
+    });
+  });
+
+  describe('trusted access code', () => {
+    it('rotates into a TRU code stored in app_settings', async () => {
+      const code = await svc.rotateTrustedCode();
+
+      expect(code).toMatch(/^TRU-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$/);
+      expect(settingRepo.upsert).toHaveBeenCalledWith(
+        { key: 'trusted_crafter_code', value: code },
+        ['key'],
+      );
+    });
+  });
+
+  describe('cancelExpiredPending', () => {
+    it('cancels only pending claims older than one hour', async () => {
+      await svc.cancelExpiredPending();
+
+      const [where, patch] = claimRepo.update.mock.calls[0];
+      expect(patch).toEqual({ status: 'cancelled' });
+      expect(where.status).toBe('pending');
+      const cutoff = new Date(where.createdAt.value);
+      expect(cutoff.getTime()).toBeLessThan(Date.now() - 59 * 60 * 1000);
     });
   });
 

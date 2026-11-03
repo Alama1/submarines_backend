@@ -3,6 +3,7 @@ import {
   IsArray,
   IsInt,
   IsNotEmpty,
+  IsOptional,
   IsString,
   Max,
   MaxLength,
@@ -35,4 +36,10 @@ export class CreateCraftClaimDto {
   @ValidateNested({ each: true })
   @Type(() => CreateCraftClaimItemDto)
   items: CreateCraftClaimItemDto[];
+
+  /** Optional trusted-crafter access code — a match creates the claim as confirmed. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  accessCode?: string;
 }

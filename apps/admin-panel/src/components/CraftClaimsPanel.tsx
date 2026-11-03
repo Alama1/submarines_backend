@@ -10,6 +10,8 @@ import {
   Check,
   Ban,
   CheckCircle,
+  KeyRound,
+  RefreshCw,
 } from 'lucide-react';
 import { CRAFT_CLAIM_STATUSES, CraftClaim, CraftClaimStatus } from '@ff14/types';
 import { StatusBadge } from './StatusBadge';
@@ -85,6 +87,19 @@ export const CraftClaimsPanel: React.FC = () => {
     onError,
   });
 
+  const { data: trusted } = useQuery<{ code: string | null }>({
+    queryKey: ['trusted-code'],
+    queryFn: async () => (await api.get('/inventory/claims/admin/trusted-code')).data,
+  });
+
+  const rotateTrustedMutation = useMutation({
+    mutationFn: async () =>
+      (await api.post<{ code: string }>('/inventory/claims/admin/trusted-code')).data,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['trusted-code'] }),
+    onError,
+  });
+
   const claims = data?.items ?? [];
 
   return (
@@ -97,7 +112,8 @@ export const CraftClaimsPanel: React.FC = () => {
           <div className="min-w-0">
             <h3 className="font-semibold text-slate-900 text-sm">Craft Claims</h3>
             <p className="text-xs text-slate-500">
-              Claim requests from crafters — a claim only takes effect once you confirm it.
+              Claim requests from crafters — pending claims reserve materials and
+              auto-cancel after 1 hour without confirmation.
             </p>
           </div>
         </div>
@@ -106,6 +122,30 @@ export const CraftClaimsPanel: React.FC = () => {
             {claims.length} claim{claims.length === 1 ? '' : 's'}
           </span>
         )}
+      </div>
+
+      {/* Trusted crafter access code — claims sent with it skip confirmation */}
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+        <KeyRound className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+        <span className="text-[11px] font-semibold text-amber-700">Trusted access code:</span>
+        {trusted?.code ? (
+          <code className="font-mono text-xs font-bold text-amber-800">{trusted.code}</code>
+        ) : (
+          <span className="text-[11px] text-amber-600 italic">none yet</span>
+        )}
+        <button
+          onClick={() => rotateTrustedMutation.mutate()}
+          disabled={rotateTrustedMutation.isPending}
+          className="ml-auto flex items-center gap-1 px-2 py-1 rounded bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-semibold transition disabled:opacity-50"
+          title={
+            trusted?.code
+              ? 'Generate a new code — the old one stops working'
+              : 'Generate the first access code'
+          }
+        >
+          <RefreshCw className={`w-3 h-3 ${rotateTrustedMutation.isPending ? 'animate-spin' : ''}`} />
+          {trusted?.code ? 'Generate new code' : 'Generate code'}
+        </button>
       </div>
 
       {/* Status filter */}

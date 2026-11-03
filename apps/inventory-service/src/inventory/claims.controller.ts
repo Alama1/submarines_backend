@@ -51,6 +51,16 @@ export class ClaimsController {
     return this.svc.findAll(statuses?.length ? statuses : undefined);
   }
 
+  @Get('admin/trusted-code')
+  getTrustedCode() {
+    return this.svc.getTrustedCode().then((code) => ({ code }));
+  }
+
+  @Post('admin/trusted-code')
+  rotateTrustedCode() {
+    return this.svc.rotateTrustedCode().then((code) => ({ code }));
+  }
+
   @Patch('admin/:id/confirm')
   confirm(@Param('id') id: string) {
     return this.svc.confirmById(id);

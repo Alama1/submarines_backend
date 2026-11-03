@@ -46,6 +46,8 @@ describe('isPublicRoute', () => {
     ['PUT', '/api/prices/1'],
     ['GET', '/api/auth/whitelist'],
     ['POST', '/api/inventory/claims/CLM-1/confirm'],
+    ['GET', '/api/inventory/claims/admin/trusted-code'],
+    ['POST', '/api/inventory/claims/admin/trusted-code'],
     ['DELETE', '/api/inventory/cache/characters/1'],
     ['POST', '/health'],
   ])('denies %s %s', (method, url) => {

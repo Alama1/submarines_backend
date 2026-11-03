@@ -4,9 +4,11 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, LessThan, Repository } from 'typeorm';
 import {
+  AppSetting,
   BaseMaterial,
   CraftClaim,
   CraftClaimStatus,
@@ -27,6 +29,11 @@ export class ClaimsService {
     'confirmed',
   ];
 
+  static readonly TRUSTED_CODE_KEY = 'trusted_crafter_code';
+
+  /** A pending claim holds its materials for this long before auto-cancelling. */
+  private static readonly PENDING_TTL_MS = 60 * 60 * 1000;
+
   constructor(
     @InjectRepository(CraftClaim)
     private readonly claimRepo: Repository<CraftClaim>,
@@ -34,6 +41,8 @@ export class ClaimsService {
     private readonly materialRepo: Repository<BaseMaterial>,
     @InjectRepository(CrafterBulkDiscount)
     private readonly bonusRepo: Repository<CrafterBulkDiscount>,
+    @InjectRepository(AppSetting)
+    private readonly settingRepo: Repository<AppSetting>,
   ) {}
 
   private async resolveBonusPct(totalUnits: number): Promise<number> {
@@ -79,13 +88,18 @@ export class ClaimsService {
     const bonusPct = await this.resolveBonusPct(totalUnits);
     const bonusAmount = Math.round(subtotal * (bonusPct / 100));
 
+    // Trusted crafters (access code from the admin panel) skip confirmation —
+    // their claims are born confirmed, so the pending-TTL cron never touches them.
+    const trusted = await this.isTrustedAccessCode(dto.accessCode);
+
     return this.claimRepo.save(
       this.claimRepo.create({
         claimCode: await generateReadableCode('CLM', 3, (code) =>
           this.claimRepo.exist({ where: { claimCode: code } }),
         ),
         nickname: dto.nickname.trim(),
-        status: 'pending',
+        status: trusted ? 'confirmed' : 'pending',
+        confirmedAt: trusted ? new Date() : null,
         subtotal,
         bonusPct,
         bonusAmount,
@@ -93,6 +107,47 @@ export class ClaimsService {
         items: priced,
       }),
     );
+  }
+
+  async getTrustedCode(): Promise<string | null> {
+    const row = await this.settingRepo.findOne({
+      where: { key: ClaimsService.TRUSTED_CODE_KEY },
+    });
+    return row?.value ?? null;
+  }
+
+  private async isTrustedAccessCode(accessCode?: string): Promise<boolean> {
+    if (!accessCode?.trim()) return false;
+    const current = await this.getTrustedCode();
+    return !!current && accessCode.trim().toUpperCase() === current.toUpperCase();
+  }
+
+  /** Rotates the single shared trusted-crafter code; old codes stop working. */
+  async rotateTrustedCode(): Promise<string> {
+    const code = await generateReadableCode('TRU', 2, async () => false);
+    await this.settingRepo.upsert(
+      { key: ClaimsService.TRUSTED_CODE_KEY, value: code },
+      ['key'],
+    );
+    return code;
+  }
+
+  /**
+   * Pending claims reserve materials for one hour; after that they are
+   * cancelled here (every 5 min, so a claim may linger reserved for up to
+   * ~5 extra minutes). shortcut: 5-min granularity, upgrade to per-claim
+   * timers only if crafters complain about the grace window.
+   */
+  @Cron('0 */5 * * * *')
+  async cancelExpiredPending(): Promise<void> {
+    const cutoff = new Date(Date.now() - ClaimsService.PENDING_TTL_MS);
+    const { affected } = await this.claimRepo.update(
+      { status: 'pending', createdAt: LessThan(cutoff) },
+      { status: 'cancelled' },
+    );
+    if (affected) {
+      this.logger.log(`Auto-cancelled ${affected} expired pending claim(s)`);
+    }
   }
 
   async findByCode(code: string): Promise<CraftClaim> {
