@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { renderMarkdown } from '../lib/markdown';
 import { NewsItem } from '@ff14/types';
 import { Megaphone, Plus, Pencil, Trash2, AlertCircle, X } from 'lucide-react';
 
@@ -151,9 +152,17 @@ export const NewsPage: React.FC = () => {
                 required
                 value={draft.description}
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-                placeholder="Details shown under the title. Line breaks are kept."
+                placeholder={'Markdown: **bold** *italic* `code` [link](https://…) - bullets'}
                 className={`${field} resize-y`}
               />
+              <div className="mt-2 p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-800 nb-md">
+                <div className="text-slate-400 mb-1">Live preview</div>
+                {draft.description.trim() ? (
+                  renderMarkdown(draft.description)
+                ) : (
+                  <span className="italic">Nothing to preview yet…</span>
+                )}
+              </div>
             </div>
 
             <div>
@@ -259,7 +268,9 @@ export const NewsPage: React.FC = () => {
                     </span>
                     <span className="text-xs text-slate-400 font-mono flex-shrink-0">#{n.sortOrder}</span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5 line-clamp-2 whitespace-pre-line">{n.description}</p>
+                  <div className="text-xs text-slate-500 mt-0.5 line-clamp-2 nb-md">
+                    {renderMarkdown(n.description)}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <button

@@ -44,3 +44,33 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* Markdown rendering for news descriptions (light theme) */
+.nb-md a {
+  color: #047857;
+  text-decoration: underline;
+}
+.nb-md code {
+  background: #e2e8f0;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-family: ui-monospace, monospace;
+  font-size: 0.9em;
+}
+.nb-md strong {
+  color: #0f172a;
+}
+.nb-md ul {
+  list-style: disc;
+  margin: 4px 0 4px 18px;
+  padding: 0;
+}
+.nb-md li {
+  margin: 2px 0;
+}
+.nb-md > * + * {
+  margin-top: 4px;
+}
+.nb-md .nb-para {
+  margin: 0;
+}
