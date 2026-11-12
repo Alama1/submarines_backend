@@ -24,6 +24,8 @@ const RULES: PublicRouteRule[] = [
   { methods: ['GET'], pattern: /^\/inventory\/claims\/trusted\// },
   { methods: ['POST'], pattern: /^\/inventory\/claims\/[^/]+\/(cancel|complete)$/ },
   { methods: ['GET'], pattern: /^\/about(\/|$)/ },
+  // Public news banner: bare /news only (active items); /news/all stays admin-only.
+  { methods: ['GET'], pattern: /^\/news$/ },
   { methods: ['GET'], pattern: /^\/docs(\/|$)/ },
   // Public read-only catalog endpoints (plugin pricing / craft helpers).
   { methods: ['GET'], pattern: /^\/(recipes|materials|prices|discounts|crafter-discounts)(\/|$)/ },

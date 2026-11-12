@@ -8,6 +8,7 @@ import {
   Coins,
   Percent,
   Ticket,
+  Megaphone,
   KeyRound,
   Anchor,
   X,
@@ -22,6 +23,7 @@ const navItems = [
   { to: '/prices', label: 'Price Management', icon: Coins },
   { to: '/discounts', label: 'Bulk Management', icon: Percent },
   { to: '/promo', label: 'Promo', icon: Ticket },
+  { to: '/news', label: 'News Banner', icon: Megaphone },
   { to: '/settings', label: 'API Keys & Settings', icon: KeyRound },
 ];
 

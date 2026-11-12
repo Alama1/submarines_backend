@@ -86,6 +86,17 @@ export interface CreateDiscountCodeDto {
 
 export interface UpdateDiscountCodeDto extends Partial<CreateDiscountCodeDto> {}
 
+export interface NewsItem {
+  id: string;
+  title: string;
+  description: string;
+  imageUrl: string | null;
+  accentColor: string | null;
+  active: boolean;
+  sortOrder: number;
+  createdAt?: string;
+}
+
 export type PromoCodeRejectionReason = 'not_found' | 'not_started' | 'expired' | 'exhausted';
 
 export interface PromoCodeValidationResponse {

@@ -26,6 +26,8 @@ describe('isPublicRoute', () => {
     ['GET', '/api/prices/123'],
     ['GET', '/api/discounts'],
     ['GET', '/api/crafter-discounts'],
+    ['GET', '/api/news'],
+    ['GET', '/news'],
   ])('allows %s %s', (method, url) => {
     expect(isPublicRoute(method, url)).toBe(true);
   });
@@ -52,6 +54,10 @@ describe('isPublicRoute', () => {
     ['DELETE', '/api/inventory/claims/admin/trusted-codes/123e4567'],
     ['DELETE', '/api/inventory/cache/characters/1'],
     ['POST', '/health'],
+    ['GET', '/api/news/all'],
+    ['POST', '/api/news'],
+    ['PUT', '/api/news/123e4567'],
+    ['DELETE', '/api/news/123e4567'],
   ])('denies %s %s', (method, url) => {
     expect(isPublicRoute(method, url)).toBe(false);
   });

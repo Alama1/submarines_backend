@@ -17,6 +17,7 @@ import { OrderItem } from './order-item.entity';
 import { BulkDiscount } from './bulk-discount.entity';
 import { CrafterBulkDiscount } from './crafter-bulk-discount.entity';
 import { DiscountCode } from './discount-code.entity';
+import { NewsItem } from './news-item.entity';
 import { PartSet } from './part-set.entity';
 import { PartSetItem } from './part-set-item.entity';
 
@@ -35,7 +36,7 @@ export const AppDataSource = new DataSource({
   database: process.env.POSTGRES_DB ?? 'ff14_db',
   username: process.env.POSTGRES_USER ?? 'ff14',
   password,
-  entities: [BaseMaterial, PartMaterial, SubmarinePart, CraftClaim, CraftClaimItem, CharacterInventory, RetainerInventory, MaterialIngredient, AppSetting, TrustedCrafterCode, Order, OrderItem, BulkDiscount, CrafterBulkDiscount, DiscountCode, PartSet, PartSetItem],
+  entities: [BaseMaterial, PartMaterial, SubmarinePart, CraftClaim, CraftClaimItem, CharacterInventory, RetainerInventory, MaterialIngredient, AppSetting, TrustedCrafterCode, Order, OrderItem, BulkDiscount, CrafterBulkDiscount, DiscountCode, NewsItem, PartSet, PartSetItem],
   migrations: ['src/migrations/*.ts'],
   namingStrategy: new SnakeNamingStrategy(),
   synchronize: false,

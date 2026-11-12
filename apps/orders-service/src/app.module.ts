@@ -16,6 +16,7 @@ import {
   BulkDiscount,
   CrafterBulkDiscount,
   DiscountCode,
+  NewsItem,
 } from '@ff14/entities';
 import { HealthController } from './health/health.controller';
 import { DiscountsModule } from './discounts/discounts.module';
@@ -23,6 +24,7 @@ import { CrafterDiscountsModule } from './crafter-discounts/crafter-discounts.mo
 import { PromoCodesModule } from './promo-codes/promo-codes.module';
 import { OrdersModule } from './orders/orders.module';
 import { AboutModule } from './about/about.module';
+import { NewsModule } from './news/news.module';
 
 @Module({
   imports: [
@@ -43,7 +45,7 @@ import { AboutModule } from './about/about.module';
           database: cfg.get<string>('POSTGRES_DB', 'ff14_db'),
           username: cfg.get<string>('POSTGRES_USER', 'ff14'),
           password,
-          entities: [BaseMaterial, MaterialIngredient, PartMaterial, SubmarinePart, Order, OrderItem, BulkDiscount, CrafterBulkDiscount, DiscountCode],
+          entities: [BaseMaterial, MaterialIngredient, PartMaterial, SubmarinePart, Order, OrderItem, BulkDiscount, CrafterBulkDiscount, DiscountCode, NewsItem],
           migrations: [join(__dirname, '../../..', 'packages/entities/dist/migrations/*.js')],
           migrationsRun: true,
           namingStrategy: new SnakeNamingStrategy(),
@@ -64,6 +66,7 @@ import { AboutModule } from './about/about.module';
     PromoCodesModule,
     OrdersModule,
     AboutModule,
+    NewsModule,
   ],
   controllers: [HealthController],
   providers: [

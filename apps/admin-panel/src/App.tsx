@@ -11,6 +11,7 @@ import { RecipesPage } from './pages/RecipesPage';
 import { PricesPage } from './pages/PricesPage';
 import { DiscountsPage } from './pages/DiscountsPage';
 import { PromoPage } from './pages/PromoPage';
+import { NewsPage } from './pages/NewsPage';
 import { SettingsPage } from './pages/SettingsPage';
 
 const queryClient = new QueryClient({
@@ -85,6 +86,7 @@ export const App: React.FC = () => {
               <Route path="prices" element={<PricesPage />} />
               <Route path="discounts" element={<DiscountsPage />} />
               <Route path="promo" element={<PromoPage />} />
+              <Route path="news" element={<NewsPage />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
 
