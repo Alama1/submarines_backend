@@ -155,13 +155,38 @@ export const NewsPage: React.FC = () => {
                 placeholder={'Markdown: **bold** *italic* `code` [link](https://…) - bullets'}
                 className={`${field} resize-y`}
               />
-              <div className="mt-2 p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-800 nb-md">
-                <div className="text-slate-400 mb-1">Live preview</div>
-                {draft.description.trim() ? (
-                  renderMarkdown(draft.description)
-                ) : (
-                  <span className="italic">Nothing to preview yet…</span>
-                )}
+              <div className="mt-2">
+                <div className="text-slate-400 mb-1">Customer banner preview</div>
+                <div
+                  className="nb-preview"
+                  style={
+                    {
+                      '--nb-accent': /^#[0-9a-fA-F]{6}$/.test(draft.accentColor)
+                        ? draft.accentColor
+                        : undefined,
+                    } as React.CSSProperties
+                  }
+                >
+                  <span className="nb-preview-close" aria-hidden="true">
+                    <X className="w-3.5 h-3.5" />
+                  </span>
+                  <div className="nb-preview-body">
+                    {draft.imageUrl.trim() && (
+                      <img className="nb-preview-image" src={draft.imageUrl.trim()} alt="" />
+                    )}
+                    <div className="nb-preview-text">
+                      <div className="nb-preview-title">{draft.title.trim() || 'Your title here'}</div>
+                      <div
+                        className="nb-preview-desc"
+                        dangerouslySetInnerHTML={{
+                          __html: draft.description.trim()
+                            ? renderMarkdown(draft.description)
+                            : '<em>Add a description to see it rendered here…</em>',
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -268,9 +293,10 @@ export const NewsPage: React.FC = () => {
                     </span>
                     <span className="text-xs text-slate-400 font-mono flex-shrink-0">#{n.sortOrder}</span>
                   </div>
-                  <div className="text-xs text-slate-500 mt-0.5 line-clamp-2 nb-md">
-                    {renderMarkdown(n.description)}
-                  </div>
+                  <div
+                    className="text-xs text-slate-500 mt-0.5 line-clamp-2 nb-md"
+                    dangerouslySetInnerHTML={{ __html: renderMarkdown(n.description) }}
+                  />
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <button
