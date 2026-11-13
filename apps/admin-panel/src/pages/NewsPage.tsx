@@ -46,6 +46,7 @@ export const NewsPage: React.FC = () => {
   const [draft, setDraft] = useState<NewsDraft>(EMPTY_DRAFT);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(true);
 
   const { data: news, isLoading } = useQuery<NewsItem[]>({
     queryKey: ['news'],
@@ -155,39 +156,6 @@ export const NewsPage: React.FC = () => {
                 placeholder={'Markdown: **bold** *italic* `code` [link](https://…) - bullets'}
                 className={`${field} resize-y`}
               />
-              <div className="mt-2">
-                <div className="text-slate-400 mb-1">Customer banner preview</div>
-                <div
-                  className="nb-preview"
-                  style={
-                    {
-                      '--nb-accent': /^#[0-9a-fA-F]{6}$/.test(draft.accentColor)
-                        ? draft.accentColor
-                        : undefined,
-                    } as React.CSSProperties
-                  }
-                >
-                  <span className="nb-preview-close" aria-hidden="true">
-                    <X className="w-3.5 h-3.5" />
-                  </span>
-                  <div className="nb-preview-body">
-                    {draft.imageUrl.trim() && (
-                      <img className="nb-preview-image" src={draft.imageUrl.trim()} alt="" />
-                    )}
-                    <div className="nb-preview-text">
-                      <div className="nb-preview-title">{draft.title.trim() || 'Your title here'}</div>
-                      <div
-                        className="nb-preview-desc"
-                        dangerouslySetInnerHTML={{
-                          __html: draft.description.trim()
-                            ? renderMarkdown(draft.description)
-                            : '<em>Add a description to see it rendered here…</em>',
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
 
             <div>
@@ -329,6 +297,57 @@ export const NewsPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {previewOpen ? (
+        <div
+          className="nb-preview"
+          role="note"
+          aria-label="News banner preview"
+          style={
+            {
+              '--nb-accent': /^#[0-9a-fA-F]{6}$/.test(draft.accentColor)
+                ? draft.accentColor
+                : undefined,
+            } as React.CSSProperties
+          }
+        >
+          <span className="nb-preview-tag">
+            Live banner preview — floats bottom-right just like on the customer site
+          </span>
+          <button
+            type="button"
+            className="nb-preview-close"
+            onClick={() => setPreviewOpen(false)}
+            aria-label="Hide banner preview"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+          <div className="nb-preview-body">
+            {draft.imageUrl.trim() && (
+              <img className="nb-preview-image" src={draft.imageUrl.trim()} alt="" />
+            )}
+            <div className="nb-preview-text">
+              <div className="nb-preview-title">{draft.title.trim() || 'Your title here'}</div>
+              <div
+                className="nb-preview-desc"
+                dangerouslySetInnerHTML={{
+                  __html: draft.description.trim()
+                    ? renderMarkdown(draft.description)
+                    : '<em>Add a description to see it rendered here…</em>',
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setPreviewOpen(true)}
+          className="fixed right-4 bottom-4 z-[60] flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-900 text-slate-100 text-xs font-semibold shadow-lg hover:bg-slate-700 transition"
+        >
+          <Megaphone className="w-3.5 h-3.5" /> Show banner preview
+        </button>
+      )}
     </div>
   );
 };
